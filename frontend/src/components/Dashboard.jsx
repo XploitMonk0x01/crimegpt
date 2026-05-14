@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, AlertTriangle } from 'lucide-react';
 import { dashboardService } from '../services/api';
+import useFirStore from '../store/firStore';
 
 const StatCard = ({ label, value, detail, loading }) => (
   <div className="p-5 border-r border-b border-border flex flex-col justify-between min-h-[120px] group hover:bg-muted/30 transition-colors">
@@ -52,6 +53,8 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const localFirs = useFirStore(s => s.localFirs);
+  const localDraftCount = localFirs.filter(f => f.status === 'draft').length;
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -128,9 +131,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2">
         <StatCard
           label="Drafts"
-          value={loading ? '—' : stats.draft ?? 0}
+          value={loading ? localDraftCount : (stats.draft ?? 0) + localDraftCount}
           detail="In progress"
-          loading={loading}
+          loading={false}
         />
         <StatCard
           label="Rejected"

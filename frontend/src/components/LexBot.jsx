@@ -3,7 +3,46 @@ import { Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { legalService } from '../services/api';
 
+<<<<<<< Updated upstream
 const Message = ({ text, sender, sources = [] }) => (
+=======
+const formatMessageText = (text) => {
+  if (typeof text !== 'string') return text;
+  
+  return text.split('\n').map((line, lineIndex) => {
+    const isListItem = line.trim().startsWith('-');
+    const processLine = isListItem ? line.replace(/^\s*-\s*/, '') : line;
+    
+    const parts = processLine.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+    const formattedParts = parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={index} className="font-extrabold text-foreground">{part.slice(2, -2)}</strong>;
+      } else if (part.startsWith('*') && part.endsWith('*')) {
+        return <em key={index} className="font-semibold">{part.slice(1, -1)}</em>;
+      }
+      return part;
+    });
+
+    if (isListItem) {
+      return (
+        <div key={lineIndex} className="flex items-start gap-2 my-1.5 ml-2">
+          <span className="text-accent text-sm mt-1">→</span>
+          <div>{formattedParts}</div>
+        </div>
+      );
+    }
+
+    return (
+      <React.Fragment key={lineIndex}>
+        {formattedParts}
+        {lineIndex < text.split('\n').length - 1 && <br />}
+      </React.Fragment>
+    );
+  });
+};
+
+const Message = ({ text, sender, sources = [], isError = false }) => (
+>>>>>>> Stashed changes
   <motion.div
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
@@ -21,7 +60,7 @@ const Message = ({ text, sender, sources = [] }) => (
           ? 'font-medium leading-relaxed text-foreground/90'
           : 'font-bold tracking-tight leading-snug text-accent/90'
         }`}>
-        {text}
+        {formatMessageText(text)}
       </div>
 
       {sender === 'bot' && sources.length > 0 && (

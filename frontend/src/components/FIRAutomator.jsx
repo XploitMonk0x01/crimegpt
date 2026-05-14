@@ -1,7 +1,14 @@
+<<<<<<< Updated upstream
 import { useState, useEffect } from 'react';
 import { Mic, FileText, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+=======
+import React, { useState, useEffect } from 'react';
+import { Mic, FileText, ArrowRight, Loader2, X, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+>>>>>>> Stashed changes
 import { firService } from '../services/api';
+import useFirStore from '../store/firStore';
 
 const FormSection = ({ id, title, children }) => (
   <div className="border-t border-border py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 group">
@@ -67,24 +74,40 @@ function formatTimeAgo(iso) {
 export default function FIRAutomator() {
   const [isRecording, setIsRecording] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [narrative, setNarrative] = useState('');
   const [formData, setFormData] = useState({
     complainant_name: '', complainant_contact: '', complainant_address: '',
     complainant_id: '', incident_location: '', incident_time: ''
   });
-  const [recentFirs, setRecentFirs] = useState([]);
-  const [loadingFirs, setLoadingFirs] = useState(true);
+  const [loadingFirs, setLoadingFirs] = useState(false);
+  const [selectedFir, setSelectedFir] = useState(null);
 
+  const localFirs = useFirStore(s => s.localFirs);
+  const addFir = useFirStore(s => s.addFir);
+  const deleteFir = useFirStore(s => s.deleteFir);
+  const getNextFirNumber = useFirStore(s => s.getNextFirNumber);
+
+  // Merge backend FIRs with local ones on mount
   useEffect(() => {
-    const fetchFirs = async () => {
+    const fetchBackend = async () => {
       try {
+<<<<<<< Updated upstream
         const r = await firService.list({ pageSize: 10 });
         if (r.success) setRecentFirs(r.data || []);
       } catch { /* Backend may not be running */ }
       finally { setLoadingFirs(false); }
+=======
+        const r = await firService.list({ pageSize: 20 });
+        if (r.success && r.data?.length > 0) {
+          // Backend has real data — could sync here if needed
+        }
+      } catch { /* backend offline */ }
+>>>>>>> Stashed changes
     };
-    fetchFirs();
+    fetchBackend();
   }, []);
+
 
   const handleGenerate = async () => {
     if (!narrative.trim()) return;
@@ -104,8 +127,56 @@ export default function FIRAutomator() {
         // Refresh list after generation
         firService.list({ pageSize: 10 }).then(r => { if (r.success) setRecentFirs(r.data || []); }).catch(() => {});
       }
-    } catch (err) { console.error("AI Generation Failed", err); }
+    } catch (err) { 
+      console.error("AI Generation Failed", err); 
+      alert(err.response?.data?.detail?.[0]?.msg || "AI Generation failed. Ensure the narrative is at least 20 characters long.");
+    }
     finally { setIsGenerating(false); }
+  };
+
+  const handleSave = async () => {
+    if (!narrative.trim()) return;
+    setIsSaving(true);
+    try {
+      const localFir = {
+        id: `local-${Date.now()}`,
+        fir_number: getNextFirNumber(),
+        status: 'draft',
+        incident_location: formData.incident_location || 'Pending Investigation',
+        incident_description: narrative,
+        sections: [],
+        created_at: new Date().toISOString(),
+        complainant: {
+          name: formData.complainant_name || 'Unknown',
+          contact: formData.complainant_contact || '',
+          address: formData.complainant_address || '',
+          id_proof: formData.complainant_id || '',
+        },
+      };
+
+      addFir(localFir);
+      setNarrative('');
+      setFormData({
+        complainant_name: '', complainant_contact: '', complainant_address: '',
+        complainant_id: '', incident_location: '', incident_time: ''
+      });
+
+      // Best-effort backend sync
+      firService.submit({
+        fir_number: localFir.fir_number,
+        incident_description: narrative,
+        incident_date: formData.incident_time ? new Date(formData.incident_time).toISOString() : new Date().toISOString(),
+        incident_location: localFir.incident_location,
+        complainant: { name: formData.complainant_name || 'Unknown', contact: formData.complainant_contact || '', address: formData.complainant_address || '', id_number: formData.complainant_id || '' },
+        sections: [],
+        ai_narrative: narrative
+      }).catch(() => {});
+
+    } catch (err) {
+      console.error('Failed to save FIR', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const updateField = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
@@ -160,7 +231,13 @@ export default function FIRAutomator() {
           BY GENERATING THIS DOCUMENT, YOU ACKNOWLEDGE THAT ALL INPUTS ARE VERIFIED PER POLICE PROTOCOL.
         </p>
         <div className="flex gap-8">
-          <button className="label-mono text-base border-b-2 border-border/50 pb-1 hover:border-accent transition-all text-muted-foreground">Save Draft</button>
+          <button 
+            onClick={handleSave} 
+            disabled={isSaving || !narrative}
+            className="label-mono text-base border-b-2 border-border/50 pb-1 hover:border-accent transition-all text-muted-foreground disabled:opacity-50"
+          >
+            {isSaving ? 'Saving...' : 'Save FIR'}
+          </button>
           <button 
             onClick={handleGenerate} disabled={isGenerating || !narrative}
             className="flex items-center gap-3 px-8 py-4 bg-accent text-background font-bold text-lg uppercase tracking-tighter hover:bg-foreground transition-all disabled:opacity-50"
@@ -170,41 +247,115 @@ export default function FIRAutomator() {
         </div>
       </div>
 
+      {/* FIR Detail Modal */}
+      <AnimatePresence>
+        {selectedFir && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setSelectedFir(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-muted border border-border w-full max-w-2xl max-h-[80vh] overflow-y-auto p-8"
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <p className="label-mono text-[9px] text-accent/70 mb-1">FIR Record</p>
+                  <h2 className="text-3xl font-bold tracking-tighter uppercase">{selectedFir.fir_number}</h2>
+                </div>
+                <button onClick={() => setSelectedFir(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="space-y-4 border-t border-border pt-4">
+                <div>
+                  <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Status</p>
+                  <StatusBadge status={selectedFir.status} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Complainant</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.name || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Contact</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.contact || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Address</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.address || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Identity Proof</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.id_proof || '—'}</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Location</p>
+                  <p className="text-sm font-medium">{selectedFir.incident_location || '—'}</p>
+                </div>
+                <div>
+                  <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Filed</p>
+                  <p className="text-sm font-medium">{new Date(selectedFir.created_at).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="label-mono text-[8px] text-muted-foreground/50 mb-2">Incident Narrative</p>
+                  <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">{selectedFir.incident_description || selectedFir.ai_narrative || '—'}</p>
+                </div>
+              </div>
+              <div className="mt-8 flex justify-end">
+                <button
+                  onClick={() => { deleteFir(selectedFir.id); setSelectedFir(null); }}
+                  className="flex items-center gap-2 label-mono text-[10px] text-accent border border-accent/40 px-4 py-2 hover:bg-accent hover:text-background transition-all"
+                >
+                  <Trash2 size={12} /> Delete FIR
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Recent FIRs */}
       <section className="border-t border-border py-8">
         <div className="flex items-end justify-between mb-4">
           <h2 className="text-4xl font-bold tracking-tighter uppercase text-foreground/80">Your FIRs</h2>
-          <span className="label-mono text-[9px] text-muted-foreground/40">{recentFirs.length} records</span>
+          <span className="label-mono text-[9px] text-muted-foreground/40">{localFirs.length} records</span>
         </div>
         <div className="space-y-0 border-t border-border">
-          {loadingFirs ? (
-            [...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center justify-between py-6 border-b border-border px-4 -mx-4">
-                <div className="flex items-baseline gap-6">
-                  <div className="w-6 h-4 bg-muted animate-pulse" />
-                  <div><div className="w-40 h-4 bg-muted animate-pulse mb-1" /><div className="w-24 h-3 bg-muted/50 animate-pulse" /></div>
-                </div>
-                <div className="w-16 h-5 bg-muted animate-pulse" />
-              </div>
-            ))
-          ) : recentFirs.length === 0 ? (
+          {localFirs.length === 0 ? (
             <div className="py-12 text-center">
               <FileText size={40} strokeWidth={1} className="text-muted-foreground/20 mx-auto mb-3" />
               <p className="label-mono text-muted-foreground/40 text-[10px]">No FIRs yet — generate your first</p>
             </div>
           ) : (
-            recentFirs.map((fir, i) => (
+            localFirs.map((fir, i) => (
               <motion.div key={fir.id} initial={{opacity:0}} animate={{opacity:1}} transition={{delay:i*0.04}}
-                className="group flex items-center justify-between py-6 border-b border-border hover:bg-muted transition-all px-4 -mx-4 cursor-pointer"
+                className="group flex items-center justify-between py-6 border-b border-border hover:bg-muted transition-all px-4 -mx-4"
               >
-                <div className="flex items-baseline gap-6">
+                <div className="flex items-baseline gap-6 cursor-pointer flex-1" onClick={() => setSelectedFir(fir)}>
                   <span className="label-mono opacity-30 group-hover:opacity-100 group-hover:text-accent">{String(i+1).padStart(2,'0')}</span>
                   <div>
                     <p className="text-base font-bold uppercase tracking-tight">{fir.fir_number || `FIR-${fir.id.slice(0,8)}`}</p>
                     <p className="label-mono mt-0.5 text-muted-foreground text-[8px]">{formatTimeAgo(fir.created_at)}</p>
                   </div>
                 </div>
-                <StatusBadge status={fir.status} />
+                <div className="flex items-center gap-4">
+                  <StatusBadge status={fir.status} />
+                  <button
+                    onClick={() => deleteFir(fir.id)}
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-accent transition-all"
+                    title="Delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </motion.div>
             ))
           )}
