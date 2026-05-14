@@ -7,8 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.middleware.auth import get_current_user
+from app.middleware.rbac import require_role
 from app.models.officer import Officer
 from app.services.legalService import LegalService
+from app.services.ragService import RAGService
 
 router = APIRouter()
 
@@ -34,3 +36,29 @@ async def search_sections(
     service = LegalService()
     results = await service.search_sections(keyword, act=act, n_results=n_results)
     return {"success": True, "data": results}
+
+
+@router.post(
+    "/corpus/ingest",
+    summary="Ingest Legal Corpus into RAG",
+    dependencies=[Depends(require_role("admin"))],
+)
+async def ingest_corpus(
+    corpus_dir: str = Query(default="./corpus", description="Path to corpus directory"),
+    officer: Officer = Depends(get_current_user),
+):
+    """Admin-only: Ingest legal documents into ChromaDB vector store."""
+    rag = RAGService()
+    result = await rag.ingest_corpus(corpus_dir)
+    return {"success": True, "data": result}
+
+
+@router.get("/corpus/stats", summary="RAG Corpus Statistics")
+async def corpus_stats(
+    officer: Officer = Depends(get_current_user),
+):
+    """Get vector store statistics — chunk count, connection status."""
+    rag = RAGService()
+    stats = await rag.get_stats()
+    return {"success": True, "data": stats}
+

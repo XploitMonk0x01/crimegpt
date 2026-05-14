@@ -47,18 +47,49 @@ class LegalService:
         """
         logger.info(f"Legal query: {question[:100]}...")
 
-        # 1. Retrieve relevant legal chunks via RAG
-        chunks = await self._rag.query(question, n_results=5)
+        # 1. Metadata Pre-filtering (Hybrid Search strategy)
+        where = None
+        q_lower = question.lower()
+        if "bns" in q_lower or "nyaya sanhita" in q_lower:
+            where = {"act": "bns_2023"}
+        elif "pocso" in q_lower:
+            where = {"act": "pocso"}
+        elif "it act" in q_lower:
+            where = {"act": "it_act"}
 
-        # 2. Build context from retrieved chunks
+        # 2. Query Expansion (HyDE / Semantic Optimization)
+        expansion_prompt = (
+            f"Rewrite the following legal question into a concise, keyword-rich search query "
+            f"optimized for a semantic vector database. Output ONLY the search query.\n"
+            f"Question: {question}"
+        )
+        try:
+            search_query = await self._llm.generate(
+                system_prompt="You are an expert legal search engineer. Output only the query.",
+                user_prompt=expansion_prompt,
+                temperature=0.1,
+                max_tokens=50,
+            )
+            search_query = search_query.strip('"\' \n')
+            logger.info(f"Expanded query for vector search: {search_query}")
+        except Exception:
+            search_query = question
+
+        # 3. Retrieve relevant legal chunks via RAG (with context compression threshold)
+        chunks = await self._rag.query(search_query, n_results=5, where=where, min_similarity=0.45)
+
+        # 4. Build context from retrieved chunks
         context_parts = []
         sources = []
         for i, chunk in enumerate(chunks):
-            context_parts.append(f"[Source {i+1}] {chunk['text']}")
+            # Include exact section number in context for rigid citation
+            section = chunk.get('metadata', {}).get('section', 'unknown')
+            context_parts.append(f"[Source {i+1} | Section: {section}] {chunk['text']}")
             sources.append({
                 "text": chunk["text"][:200] + "..." if len(chunk["text"]) > 200 else chunk["text"],
                 "source": chunk.get("metadata", {}).get("source", "unknown"),
                 "act": chunk.get("metadata", {}).get("act", "unknown"),
+                "section": section,
                 "similarity": chunk.get("similarity", 0),
             })
 
