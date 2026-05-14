@@ -136,7 +136,7 @@ export default function FIRAutomator() {
         <p className="label-mono mb-2 text-muted-foreground/40 text-[8px]">Incident Narrative (Natural Language Input)</p>
         <textarea 
           value={narrative} onChange={(e) => setNarrative(e.target.value)}
-          className="w-full bg-transparent border-none text-lg md:text-xl font-medium tracking-tight placeholder:text-muted-foreground/10 focus:outline-none min-h-[120px] leading-relaxed text-foreground/70"
+          className="w-full bg-transparent border border-foreground/10 rounded-md p-3 text-lg md:text-xl font-medium tracking-tight placeholder:text-muted-foreground/10 focus:outline-none focus:border-foreground/30 min-h-[120px] leading-relaxed text-foreground/70"
           placeholder="Describe the incident in detail. AI will auto-fill structured fields below."
         />
       </div>

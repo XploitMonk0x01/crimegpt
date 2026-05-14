@@ -1,16 +1,37 @@
-# React + Vite
+# CrimeGPT Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the frontend for CrimeGPT, built with React and Vite.
 
-Currently, two official plugins are available:
+## Setup Instructions
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### 1. Installation
+Before running the application, make sure to install all the necessary dependencies. Navigate to the frontend directory and run:
+```bash
+npm install
+```
 
-## React Compiler
+### 2. Running the Frontend Development Server
+To start the React frontend and make it accessible across your local network, run:
+```bash
+npm run dev -- --host
+```
+The application will be available at `http://localhost:5173/` and on your network IP (e.g., `http://192.168.x.x:5173/`).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## Important: Running the Backend
+The frontend requires the Python backend to be running to function properly (otherwise you will encounter an `ECONNREFUSED` error when trying to log in).
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+To start the backend server:
+1. Open a **new terminal window** and navigate to the backend directory:
+   ```bash
+   cd ../backend
+   ```
+2. Activate the virtual environment:
+   ```bash
+   source venv/bin/activate
+   ```
+3. Start the FastAPI server:
+   ```bash
+   uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+   ```
