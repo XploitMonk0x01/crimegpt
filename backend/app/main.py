@@ -166,3 +166,7 @@ def _register_routers(app: FastAPI, settings) -> None:
     app.include_router(dashboard_router, prefix=f"{prefix}/dashboard", tags=["Dashboard"])
 
     logger.info(f"   Registered 7 API routers under {prefix}")
+
+
+# Module-level app instance for uvicorn / ASGI servers
+app = create_app()
