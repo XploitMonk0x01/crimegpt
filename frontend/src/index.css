@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0D0D0D; /* Slightly lighter black */
+  --color-foreground: #D4D4D4; /* Muted white */
+  --color-muted: #1A1A1A;
+  --color-muted-foreground: #737373;
+  --color-accent: #E13D00;     /* Slightly deeper, less "neon" vermillion */
+  --color-accent-foreground: #0A0A0A;
+  --color-border: #262626;
+  --color-input: #1A1A1A;
+  --color-card: #0F0F0F;
+  --color-card-foreground: #D4D4D4;
+  --color-ring: #E13D00;
+
+
+  --font-sans: "Inter Tight", "Inter", system-ui, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* Typography Scale (Scaled down an additional 30% for ultra-high density) */
+  --font-size-xs: 0.44rem;    /* ~7px */
+  --font-size-sm: 0.5rem;     /* ~8px */
+  --font-size-base: 0.58rem;   /* ~9.3px */
+  --font-size-lg: 0.66rem;     /* ~10.5px */
+  --font-size-xl: 0.72rem;     /* ~11.5px */
+  --font-size-2xl: 0.78rem;    /* ~12.5px */
+  --font-size-3xl: 0.945rem;   /* ~15px */
+  --font-size-4xl: 1.26rem;    /* ~20px */
+  --font-size-5xl: 1.575rem;   /* ~25px */
+  --font-size-6xl: 2.2rem;     /* ~35px */
+  --font-size-7xl: 2.835rem;   /* ~45px */
+  --font-size-8xl: 3.78rem;    /* ~60px */
+  --font-size-9xl: 4.725rem;   /* ~75px */
+
+  /* Tracking */
+  --letter-spacing-tighter: -0.06em;
+  --letter-spacing-tight: -0.04em;
+  --letter-spacing-normal: -0.01em;
+  --letter-spacing-wide: 0.05em;
+  --letter-spacing-wider: 0.1em;
+  --letter-spacing-widest: 0.2em;
+
+  /* Line Heights */
+  --line-height-none: 1;
+  --line-height-tight: 1.1;
+  --line-height-snug: 1.25;
+  --line-height-normal: 1.6;
+  --line-height-relaxed: 1.75;
+  
+  --radius-none: 0px;
+}
+
+:root {
+  color-scheme: dark;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+body {
+  @apply font-sans antialiased bg-background text-foreground;
+  margin: 0;
+  position: relative;
+}
+
+/* Global Noise Texture */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.015;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Design System Utilities */
+.text-display {
+  @apply font-serif italic;
+}
+
+.label-mono {
+  @apply font-mono uppercase tracking-widest text-xs;
+}
+
+.sharp-border {
+  @apply border border-border rounded-none;
+}
+
+.accent-underline {
+  @apply relative inline-block;
+}
+
+.accent-underline::after {
+  content: "";
+  @apply absolute bottom-0 left-0 w-full h-[2px] bg-accent transform scale-x-100 transition-transform duration-150 origin-left;
+}
+
+.accent-underline:hover::after {
+  @apply scale-x-110;
+}
+
+/* Custom Scrollbar (Editorial Style) */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-border transition-colors hover:bg-muted-foreground;
+}
+
+/* Section Spacing */
+.section-py {
+  @apply py-20 md:py-32 lg:py-40;
+}
+
+.divider {
+  @apply w-full h-px bg-border;
+}

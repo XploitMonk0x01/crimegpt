@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.controllers.AuthController import AuthController
 from app.db.session import get_db
-from app.db.redis import get_redis
+from app.db.redis_db import get_redis
 from app.middleware.auth import get_current_user
 from app.middleware.rbac import require_role
 from app.middleware.rate_limiter import rate_limit
