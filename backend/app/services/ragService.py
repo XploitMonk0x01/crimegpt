@@ -6,9 +6,9 @@ Provides:
     - query() — embed query, similarity search, return top-k chunks
     - get_collection_stats() — info about the vector store
 
-Supports two chunking strategies:
-    - Section-aware: splits on `--- Section N ---` markers (preferred for BNS)
-    - Character-based: fallback for unstructured docs
+Supports two retrieval paths:
+    - ChromaDB + FastEmbed when the vector server is available
+    - Local lexical retrieval over backend/corpus as a zero-setup fallback
 
 Usage:
     from app.services.ragService import RAGService
@@ -17,7 +17,9 @@ Usage:
 """
 
 import logging
+import math
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -25,22 +27,72 @@ from app.config import get_settings
 
 logger = logging.getLogger("crimegpt.rag")
 
+_TOKEN_RE = re.compile(r"[a-zA-Z0-9]+")
+_SECTION_SPLIT_RE = re.compile(r"--- Section ([0-9A-Za-z-]+) ---")
+
 
 class FastEmbedEmbeddingFunction:
-    """Custom embedding function using FastEmbed for pure-Python embeddings."""
+    """Custom embedding function using FastEmbed for ChromaDB embeddings."""
+
     def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
-        # Lazy import to avoid loading weights unnecessarily
+        # Lazy import to avoid loading weights unless Chroma is actually reachable.
         from fastembed import TextEmbedding
+
         self._model = TextEmbedding(model_name=model_name)
-        
+
     def __call__(self, input: list[str]) -> list[list[float]]:
-        # Returns a generator of numpy arrays, we convert to list of lists
-        embeddings = self._model.embed(input)
-        return [list(e) for e in embeddings]
+        # FastEmbed returns a generator of numpy arrays; Chroma expects plain floats.
+        return [[float(value) for value in embedding] for embedding in self._model.embed(input)]
+
+
+@lru_cache(maxsize=8)
+def _load_local_chunks(corpus_dir: str) -> tuple[dict[str, Any], ...]:
+    """Load and chunk corpus files for zero-setup local retrieval."""
+    service = RAGService()
+    corpus_path = Path(corpus_dir)
+    chunks: list[dict[str, Any]] = []
+
+    if not corpus_path.exists():
+        logger.warning("Local corpus directory not found: %s", corpus_path)
+        return tuple()
+
+    for file_path in corpus_path.rglob("*.txt"):
+        if file_path.name.startswith("."):
+            continue
+
+        try:
+            text = file_path.read_text(encoding="utf-8")
+            act_name = file_path.parent.name
+            if "--- Section" in text:
+                docs, metas = service._chunk_by_section(text, act_name, file_path.name)
+            else:
+                docs = service._chunk_text(text, chunk_size=900, overlap=120)
+                metas = [
+                    {"source": file_path.name, "act": act_name, "chunk_index": i}
+                    for i in range(len(docs))
+                ]
+
+            for doc, meta in zip(docs, metas):
+                chunks.append({"text": doc, "metadata": meta, "tokens": _tokenize(doc)})
+        except Exception as exc:  # pragma: no cover - defensive file loading path
+            logger.error("Failed to load local corpus file %s: %s", file_path, exc)
+
+    logger.info("Loaded %s local RAG chunks from %s", len(chunks), corpus_path)
+    return tuple(chunks)
+
+
+def _tokenize(text: str) -> set[str]:
+    """Tokenize text for lightweight lexical retrieval."""
+    return {token.lower() for token in _TOKEN_RE.findall(text) if len(token) > 1}
+
+
+def _default_corpus_dir() -> Path:
+    """Return the backend corpus path independent of the process cwd."""
+    return Path(__file__).resolve().parents[2] / "corpus"
 
 
 class RAGService:
-    """ChromaDB-based RAG pipeline for legal corpus retrieval."""
+    """ChromaDB-based RAG pipeline with a local corpus fallback."""
 
     def __init__(self):
         self._settings = get_settings()
@@ -50,29 +102,33 @@ class RAGService:
 
     def _get_client(self):
         """Lazy-init ChromaDB client and FastEmbed function."""
-        if self._client is None:
+        if self._client is None and self._collection is None:
             try:
                 import chromadb
-
-                if not self._embedding_fn:
-                    logger.info("Initializing FastEmbed embedding model...")
-                    self._embedding_fn = FastEmbedEmbeddingFunction()
 
                 self._client = chromadb.HttpClient(
                     host=self._settings.chroma.host,
                     port=self._settings.chroma.port,
                 )
+                # Verify server availability before loading embedding weights.
+                self._client.heartbeat()
+
+                if self._embedding_fn is None:
+                    logger.info("Initializing FastEmbed embedding model...")
+                    self._embedding_fn = FastEmbedEmbeddingFunction()
+
                 self._collection = self._client.get_or_create_collection(
                     name=self._settings.chroma.collection_name,
                     embedding_function=self._embedding_fn,
                     metadata={"hnsw:space": "cosine"},
                 )
                 logger.info(
-                    f"Connected to ChromaDB at "
-                    f"{self._settings.chroma.host}:{self._settings.chroma.port}"
+                    "Connected to ChromaDB at %s:%s",
+                    self._settings.chroma.host,
+                    self._settings.chroma.port,
                 )
             except Exception as e:
-                logger.warning(f"ChromaDB not available: {e}")
+                logger.warning("ChromaDB not available; using local corpus fallback: %s", e)
                 self._client = None
                 self._collection = None
         return self._collection
@@ -86,15 +142,19 @@ class RAGService:
         min_similarity: float = 0.5,
     ) -> list[dict[str, Any]]:
         """
-        Query the legal corpus — embed query and find similar chunks.
+        Query the legal corpus and return top matching chunks.
 
-        Returns list of dicts with: text, metadata, distance (similarity score).
-        Falls back to mock results if ChromaDB is unavailable.
+        ChromaDB is preferred. If ChromaDB or embeddings are unavailable, this method
+        still returns useful results by searching the checked-in legal corpus locally.
         """
         collection = self._get_client()
-        if not collection:
-            logger.warning("ChromaDB not available — returning mock results")
-            return self._mock_results(query_text)
+        if collection is None:
+            return self._query_local_corpus(
+                query_text,
+                n_results=n_results,
+                where=where,
+                min_similarity=min_similarity,
+            )
 
         try:
             kwargs: dict[str, Any] = {
@@ -113,23 +173,27 @@ class RAGService:
                 dists = results["distances"][0] if results.get("distances") else [0.0] * len(docs)
 
                 for doc, meta, dist in zip(docs, metas, dists):
-                    # Chroma returns cosine distance (0 is identical, 1 is orthogonal)
-                    # For fastembed BGE models, good matches are usually distance < 0.5 (similarity > 0.5)
-                    similarity = round(1.0 - dist, 4)
-                    
+                    # Chroma returns cosine distance (0 identical, 1 orthogonal).
+                    similarity = round(max(0.0, 1.0 - float(dist)), 4)
                     if similarity >= min_similarity:
-                        chunks.append({
-                            "text": doc,
-                            "metadata": meta,
-                            "similarity": similarity,
-                        })
+                        chunks.append({"text": doc, "metadata": meta or {}, "similarity": similarity})
 
-            logger.info(f"RAG query returned {len(chunks)} chunks (threshold {min_similarity}) for: {query_text[:80]}...")
+            logger.info(
+                "RAG query returned %s Chroma chunks (threshold %s) for: %s...",
+                len(chunks),
+                min_similarity,
+                query_text[:80],
+            )
             return chunks
 
         except Exception as e:
-            logger.error(f"RAG query error: {e}")
-            return self._mock_results(query_text)
+            logger.error("RAG query error; using local corpus fallback: %s", e)
+            return self._query_local_corpus(
+                query_text,
+                n_results=n_results,
+                where=where,
+                min_similarity=min_similarity,
+            )
 
     async def ingest_corpus(self, corpus_dir: str | None = None) -> dict[str, Any]:
         """
@@ -139,10 +203,14 @@ class RAGService:
         falls back to character-based chunking otherwise.
         """
         collection = self._get_client()
-        if not collection:
-            return {"status": "skipped", "reason": "ChromaDB not available"}
+        if collection is None:
+            return {
+                "status": "skipped",
+                "reason": "ChromaDB not available; local corpus fallback is active",
+                "fallback_chunks": len(_load_local_chunks(str(self._resolve_corpus_path(corpus_dir)))),
+            }
 
-        corpus_path = Path(corpus_dir) if corpus_dir else Path("./corpus")
+        corpus_path = self._resolve_corpus_path(corpus_dir)
         if not corpus_path.exists():
             return {"status": "skipped", "reason": f"Corpus directory not found: {corpus_path}"}
 
@@ -151,34 +219,28 @@ class RAGService:
         files_processed = []
 
         for file_path in corpus_path.rglob("*.txt"):
-            # Skip README, gitkeep, etc.
-            if file_path.name.startswith(".") or file_path.name.lower() == "readme.md":
+            if file_path.name.startswith("."):
                 continue
 
             try:
                 text = file_path.read_text(encoding="utf-8")
-                act_name = file_path.parent.name  # e.g., "bns_2023"
+                act_name = file_path.parent.name
 
-                # Choose chunking strategy
                 if "--- Section" in text:
                     chunks, chunk_metas = self._chunk_by_section(text, act_name, file_path.name)
                 else:
-                    chunks = self._chunk_text(text, chunk_size=500, overlap=50)
+                    chunks = self._chunk_text(text, chunk_size=900, overlap=120)
                     chunk_metas = [
-                        {
-                            "source": file_path.name,
-                            "act": act_name,
-                            "chunk_index": i,
-                        }
+                        {"source": file_path.name, "act": act_name, "chunk_index": i}
                         for i in range(len(chunks))
                     ]
 
                 if not chunks:
                     continue
 
-                ids = [f"{file_path.stem}_{i}" for i in range(len(chunks))]
+                safe_stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", file_path.stem)
+                ids = [f"{act_name}_{safe_stem}_{i}" for i in range(len(chunks))]
 
-                # Upsert in batches of 100 (ChromaDB limit)
                 batch_size = 100
                 for start in range(0, len(chunks), batch_size):
                     end = start + batch_size
@@ -189,17 +251,14 @@ class RAGService:
                     )
 
                 ingested += len(chunks)
-                files_processed.append({
-                    "file": file_path.name,
-                    "chunks": len(chunks),
-                    "act": act_name,
-                })
-                logger.info(f"Ingested {len(chunks)} chunks from {file_path.name}")
+                files_processed.append({"file": file_path.name, "chunks": len(chunks), "act": act_name})
+                logger.info("Ingested %s chunks from %s", len(chunks), file_path.name)
 
             except Exception as e:
                 errors += 1
-                logger.error(f"Failed to ingest {file_path}: {e}")
+                logger.error("Failed to ingest %s: %s", file_path, e)
 
+        _load_local_chunks.cache_clear()
         return {
             "status": "completed",
             "chunks_ingested": ingested,
@@ -207,51 +266,100 @@ class RAGService:
             "errors": errors,
         }
 
-    def _chunk_by_section(
-        self, text: str, act_name: str, filename: str
-    ) -> tuple[list[str], list[dict]]:
+    def _resolve_corpus_path(self, corpus_dir: str | None = None) -> Path:
+        if corpus_dir:
+            path = Path(corpus_dir)
+            if path.exists():
+                return path
+            backend_relative = Path(__file__).resolve().parents[2] / corpus_dir
+            if backend_relative.exists():
+                return backend_relative
+        return _default_corpus_dir()
+
+    def _query_local_corpus(
+        self,
+        query_text: str,
+        *,
+        n_results: int,
+        where: dict | None,
+        min_similarity: float,
+    ) -> list[dict[str, Any]]:
+        """Lightweight local search used when ChromaDB is unavailable."""
+        corpus_path = self._resolve_corpus_path(None)
+        chunks = _load_local_chunks(str(corpus_path))
+        query_tokens = _tokenize(query_text)
+        if not chunks or not query_tokens:
+            return self._mock_results(query_text)[:n_results]
+
+        scored: list[tuple[float, dict[str, Any]]] = []
+        requested_act = where.get("act") if where else None
+        requested_section = where.get("section") if where else None
+
+        for chunk in chunks:
+            metadata = chunk["metadata"]
+            if requested_act and metadata.get("act") != requested_act:
+                continue
+            if requested_section and str(metadata.get("section")) != str(requested_section):
+                continue
+
+            doc_tokens = chunk["tokens"]
+            overlap = query_tokens & doc_tokens
+            if not overlap:
+                continue
+
+            # Weighted Jaccard-like score that rewards exact legal section mentions.
+            lexical = len(overlap) / math.sqrt(max(len(query_tokens), 1) * max(len(doc_tokens), 1))
+            section_bonus = 0.0
+            section = str(metadata.get("section", ""))
+            if section and section in query_tokens:
+                section_bonus += 0.25
+            if "section" in query_tokens and section:
+                section_bonus += 0.05
+            similarity = round(min(0.99, lexical + section_bonus), 4)
+
+            if similarity >= min_similarity or len(scored) < n_results * 3:
+                scored.append((similarity, chunk))
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        results = [
+            {"text": item["text"], "metadata": item["metadata"], "similarity": score}
+            for score, item in scored[:n_results]
+        ]
+
+        if not results:
+            return self._mock_results(query_text)[:n_results]
+
+        logger.info("RAG local fallback returned %s chunks for: %s...", len(results), query_text[:80])
+        return results
+
+    def _chunk_by_section(self, text: str, act_name: str, filename: str) -> tuple[list[str], list[dict]]:
         """
         Section-aware chunking for BNS-style legal documents.
 
-        Splits on `--- Section N ---` markers, then sub-chunks sections
-        that exceed max_chunk_size. Each chunk preserves section number
-        and act name in metadata for precise citation.
+        Splits on `--- Section N ---` markers, then sub-chunks sections that exceed
+        max_chunk_size. Each chunk preserves section number and act metadata.
         """
-        max_chunk_size = 1500  # chars — larger than char-based to keep sections intact
-        sub_chunk_size = 800
-        sub_chunk_overlap = 100
+        max_chunk_size = 1800
+        sub_chunk_size = 1000
+        sub_chunk_overlap = 150
 
-        # Split by section markers
-        parts = re.split(r'--- Section (\d+) ---', text)
-
+        parts = _SECTION_SPLIT_RE.split(text)
         chunks: list[str] = []
         metas: list[dict] = []
 
-        # parts[0] = preamble (before first section)
         preamble = parts[0].strip()
         if preamble and len(preamble) > 50:
             chunks.append(preamble)
-            metas.append({
-                "source": filename,
-                "act": act_name,
-                "section": "preamble",
-                "chunk_index": 0,
-            })
+            metas.append({"source": filename, "act": act_name, "section": "preamble", "chunk_index": 0})
 
-        # Process section pairs: parts[1]=section_num, parts[2]=content, ...
         for i in range(1, len(parts) - 1, 2):
-            section_num = parts[i]
+            section_num = parts[i].strip()
             section_text = parts[i + 1].strip()
-
             if not section_text:
                 continue
 
-            # Prepend section number for context
-            section_header = f"Section {section_num}."
-            full_section = f"{section_header} {section_text}"
-
+            full_section = f"Section {section_num}. {section_text}"
             if len(full_section) <= max_chunk_size:
-                # Section fits in one chunk
                 chunks.append(full_section)
                 metas.append({
                     "source": filename,
@@ -260,10 +368,8 @@ class RAGService:
                     "chunk_index": len(chunks) - 1,
                 })
             else:
-                # Sub-chunk large sections
-                sub_chunks = self._chunk_text(full_section, sub_chunk_size, sub_chunk_overlap)
-                for j, sc in enumerate(sub_chunks):
-                    chunks.append(sc)
+                for j, sub_chunk in enumerate(self._chunk_text(full_section, sub_chunk_size, sub_chunk_overlap)):
+                    chunks.append(sub_chunk)
                     metas.append({
                         "source": filename,
                         "act": act_name,
@@ -273,93 +379,79 @@ class RAGService:
                     })
 
         logger.info(
-            f"Section-aware chunking: {len(chunks)} chunks from "
-            f"{(len(parts)-1)//2} sections in {filename}"
+            "Section-aware chunking: %s chunks from %s sections in %s",
+            len(chunks),
+            (len(parts) - 1) // 2,
+            filename,
         )
         return chunks, metas
 
     def _chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
         """Split text into overlapping chunks by character count."""
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive")
+        if overlap < 0 or overlap >= chunk_size:
+            raise ValueError("overlap must be non-negative and smaller than chunk_size")
+
         chunks = []
         start = 0
         while start < len(text):
-            end = start + chunk_size
-            chunk = text[start:end]
-            if chunk.strip():
-                chunks.append(chunk.strip())
+            end = min(start + chunk_size, len(text))
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
+            if end == len(text):
+                break
             start = end - overlap
         return chunks
 
     def _mock_results(self, query_text: str) -> list[dict[str, Any]]:
-        """Fallback mock results when ChromaDB is unavailable."""
-        # Provide realistic mock data covering common BNS sections
+        """Last-resort mock results when no corpus is available."""
         mock_db = [
             {
                 "text": (
-                    "Section 303. Theft — Whoever, intending to take dishonestly "
-                    "any movable property out of the possession of any person without "
-                    "that person's consent, moves that property in order to such taking, "
-                    "is said to commit theft. Punishment: imprisonment up to three years, "
-                    "or fine, or both."
+                    "Section 303. Theft — Whoever, intending to take dishonestly any movable "
+                    "property out of the possession of any person without that person's consent, "
+                    "moves that property in order to such taking, is said to commit theft."
                 ),
-                "metadata": {"source": "bns-2023.txt", "act": "bns_2023", "section": "303"},
+                "metadata": {"source": "fallback", "act": "bns_2023", "section": "303"},
                 "similarity": 0.85,
             },
             {
                 "text": (
-                    "Section 304. Snatching — Whoever commits theft by snatching "
-                    "any movable property from any person shall be punished with "
-                    "imprisonment of either description for a term which may extend "
-                    "to three years, and shall also be liable to fine."
+                    "Section 304. Snatching — Whoever commits theft by snatching any movable "
+                    "property from any person shall be punished with imprisonment and fine."
                 ),
-                "metadata": {"source": "bns-2023.txt", "act": "bns_2023", "section": "304"},
+                "metadata": {"source": "fallback", "act": "bns_2023", "section": "304"},
                 "similarity": 0.78,
             },
             {
-                "text": (
-                    "Section 101. Murder — Except in the cases hereinafter excepted, "
-                    "culpable homicide is murder if the act by which the death is caused "
-                    "is done with the intention of causing death, or with the intention of "
-                    "causing such bodily injury as the offender knows to be likely to cause "
-                    "the death of the person to whom the harm is caused."
-                ),
-                "metadata": {"source": "bns-2023.txt", "act": "bns_2023", "section": "101"},
+                "text": "Section 101. Murder — Culpable homicide is murder in specified circumstances.",
+                "metadata": {"source": "fallback", "act": "bns_2023", "section": "101"},
                 "similarity": 0.72,
-            },
-            {
-                "text": (
-                    "Section 63. Rape — A man is said to commit rape if he penetrates "
-                    "his penis, to any extent, into the vagina, mouth, urethra or anus of "
-                    "a woman or makes her to do so with him or any other person, under "
-                    "circumstances falling under any of seven descriptions including "
-                    "against her will or without her consent."
-                ),
-                "metadata": {"source": "bns-2023.txt", "act": "bns_2023", "section": "63"},
-                "similarity": 0.70,
             },
         ]
 
-        # Basic keyword matching for relevant mock results
         query_lower = query_text.lower()
         scored = []
         for item in mock_db:
-            score = 0
-            for word in query_lower.split():
-                if word in item["text"].lower():
-                    score += 1
+            score = sum(1 for word in query_lower.split() if word in item["text"].lower())
             if score > 0:
                 scored.append((score, item))
-
         scored.sort(key=lambda x: x[0], reverse=True)
-        if scored:
-            return [item for _, item in scored[:3]]
-        return mock_db[:2]
+        return [item for _, item in scored] or mock_db[:2]
 
     async def get_stats(self) -> dict[str, Any]:
-        """Get collection statistics."""
+        """Get collection statistics and fallback status."""
         collection = self._get_client()
-        if not collection:
-            return {"status": "unavailable", "using_mock": True}
+        fallback_chunks = len(_load_local_chunks(str(self._resolve_corpus_path(None))))
+        if collection is None:
+            return {
+                "status": "fallback",
+                "using_mock": fallback_chunks == 0,
+                "local_corpus_chunks": fallback_chunks,
+                "corpus_path": str(self._resolve_corpus_path(None)),
+            }
         try:
             count = collection.count()
             return {
@@ -367,6 +459,7 @@ class RAGService:
                 "collection": self._settings.chroma.collection_name,
                 "count": count,
                 "using_mock": False,
+                "local_corpus_chunks": fallback_chunks,
             }
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": str(e), "local_corpus_chunks": fallback_chunks}

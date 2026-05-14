@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, BookOpen } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { legalService } from '../services/api';
 
-const Message = ({ text, sender, sources = [], isError = false }) => (
+const Message = ({ text, sender, sources = [] }) => (
   <motion.div
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
@@ -72,7 +72,7 @@ export default function LexBot() {
         sources: response.data.sources || []
       };
       setMessages(prev => [...prev, botMessage]);
-    } catch (err) {
+    } catch {
       setMessages(prev => [...prev, {
         text: "Error connecting to Legal Intelligence Node. Please verify connection.",
         sender: 'bot',

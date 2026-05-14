@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -8,8 +8,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Shield,
-  GripVertical
+  Shield
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab }) {
@@ -25,7 +24,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
     { id: 'linkage', label: 'Linkage', icon: Link2 },
   ];
 
-  const startResizing = useCallback((e) => {
+  const startResizing = useCallback(() => {
     setIsResizing(true);
   }, []);
 
