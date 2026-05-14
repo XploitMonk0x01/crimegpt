@@ -15,7 +15,7 @@ import logging
 from fastapi import Depends, HTTPException, Request, status
 import redis.asyncio as aioredis
 
-from app.db.redis import get_redis
+from app.db.redis_db import get_redis
 
 logger = logging.getLogger("crimegpt.ratelimit")
 

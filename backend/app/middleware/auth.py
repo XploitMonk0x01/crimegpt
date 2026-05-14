@@ -20,7 +20,7 @@ from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.db.redis import get_redis
+from app.db.redis_db import get_redis
 from app.models.officer import Officer
 from app.repositories.OfficerRepository import OfficerRepository
 from app.utils.jwt import decode_token

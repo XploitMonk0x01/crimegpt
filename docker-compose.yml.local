@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: crimegpt_db
+    environment:
+      POSTGRES_USER: crimegpt
+      POSTGRES_PASSWORD: crimegpt_pass
+      POSTGRES_DB: crimegpt_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: crimegpt_redis
+    ports:
+      - "6379:6379"
+
+  chroma:
+    image: chromadb/chroma:0.5.11
+    container_name: crimegpt_chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/data
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crimegpt_backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://crimegpt:crimegpt_pass@db:5432/crimegpt_db
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - JWT_SECRET=super-secret-key-for-dev
+      - DEBUG=true
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+      - chroma
+    volumes:
+      - ./backend:/app
+
+volumes:
+  postgres_data:
+  chroma_data:

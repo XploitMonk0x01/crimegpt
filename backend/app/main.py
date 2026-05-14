@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("🛑 Shutting down CrimeGPT backend...")
 
     # Close Redis connection
-    from app.db.redis import close_redis
+    from app.db.redis_db import close_redis
 
     await close_redis()
     logger.info("   Redis connection closed")

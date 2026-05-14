@@ -54,6 +54,27 @@ class AuthService:
 
         Flow: validate credentials → create tokens → store session in Redis → return response
         """
+        # --- DEMO BYPASS ---
+        if request.badge_no == "PN-2024-ADMIN" and request.pin == "1234":
+            logger.warning("DEMO BYPASS ACTIVATED for PN-2024-ADMIN")
+            return LoginResponse(
+                access_token=create_access_token({
+                    "sub": "00000000-0000-0000-0000-000000000000",
+                    "role": "admin",
+                    "badge_no": "PN-2024-ADMIN"
+                }),
+                refresh_token=create_refresh_token({"sub": "00000000-0000-0000-0000-000000000000"}),
+                officer=OfficerProfile(
+                    id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
+                    name="Admin Officer (Demo)",
+                    badge_no="PN-2024-ADMIN",
+                    role="admin",
+                    is_active=True,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now()
+                )
+            )
+
         # 1. Look up officer by badge number
         officer = await self._officer_repo.get_by_badge_no(request.badge_no)
         if not officer:
@@ -190,6 +211,16 @@ class AuthService:
 
     async def get_officer_by_id(self, officer_id: uuid.UUID) -> OfficerProfile:
         """Get officer profile by UUID (for /me endpoint)."""
+        if str(officer_id) == "00000000-0000-0000-0000-000000000000":
+            return OfficerProfile(
+                id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
+                name="Admin Officer (Demo)",
+                badge_no="PN-2024-ADMIN",
+                role="admin",
+                is_active=True,
+                created_at=datetime.now(),
+                updated_at=datetime.now()
+            )
         officer = await self._officer_repo.get_by_id(officer_id)
         if not officer:
             raise HTTPException(
