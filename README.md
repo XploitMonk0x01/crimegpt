@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="crimegpt-logo.png" alt="crimeGPT banner logo" width="50%">
+</p>
+
+
 # CrimeGPT - An Powered Automation for Crime Documentation and Legal Intelligence
 
 This is the React + Vite frontend for the CrimeGPT platform, designed specifically for Indian Law Enforcement Agencies. It features a high-density "Micro-Editorial" UI built with Tailwind CSS 4.0 and Framer Motion.
