@@ -1,12 +1,6 @@
-<<<<<<< Updated upstream
-import { useState, useEffect } from 'react';
-import { Mic, FileText, ArrowRight, Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
-=======
 import React, { useState, useEffect } from 'react';
 import { Mic, FileText, ArrowRight, Loader2, X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
->>>>>>> Stashed changes
 import { firService } from '../services/api';
 import useFirStore from '../store/firStore';
 
@@ -92,18 +86,11 @@ export default function FIRAutomator() {
   useEffect(() => {
     const fetchBackend = async () => {
       try {
-<<<<<<< Updated upstream
-        const r = await firService.list({ pageSize: 10 });
-        if (r.success) setRecentFirs(r.data || []);
-      } catch { /* Backend may not be running */ }
-      finally { setLoadingFirs(false); }
-=======
         const r = await firService.list({ pageSize: 20 });
         if (r.success && r.data?.length > 0) {
           // Backend has real data — could sync here if needed
         }
       } catch { /* backend offline */ }
->>>>>>> Stashed changes
     };
     fetchBackend();
   }, []);

@@ -1,11 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { legalService } from '../services/api';
 
-<<<<<<< Updated upstream
-const Message = ({ text, sender, sources = [] }) => (
-=======
 const formatMessageText = (text) => {
   if (typeof text !== 'string') return text;
   
@@ -42,7 +39,6 @@ const formatMessageText = (text) => {
 };
 
 const Message = ({ text, sender, sources = [], isError = false }) => (
->>>>>>> Stashed changes
   <motion.div
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
