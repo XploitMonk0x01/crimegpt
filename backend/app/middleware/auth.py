@@ -12,6 +12,8 @@ verifies the Redis session (if available), and returns the Officer ORM object.
 
 import uuid
 import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
@@ -24,11 +26,35 @@ from app.db.redis_db import get_redis
 from app.models.officer import Officer
 from app.repositories.OfficerRepository import OfficerRepository
 from app.utils.jwt import decode_token
+from app.types.enums import OfficerRole
 
 logger = logging.getLogger("crimegpt.auth")
 
+# Demo user UUID — matches the one in authService.py
+_DEMO_UUID = uuid.UUID("00000000-0000-0000-0000-000000000000")
+
 # Security scheme — extracts Bearer token from Authorization header
 _bearer_scheme = HTTPBearer(auto_error=True)
+
+
+@dataclass
+class DemoOfficer:
+    """Lightweight stand-in for Officer ORM model in demo mode.
+    Duck-types the Officer interface without touching SQLAlchemy instrumentation."""
+    id: uuid.UUID = field(default_factory=lambda: _DEMO_UUID)
+    name: str = "Admin Officer (Demo)"
+    badge_no: str = "PN-2024-ADMIN"
+    role: OfficerRole = OfficerRole.ADMIN
+    station_id: uuid.UUID | None = None
+    password_hash: str = "demo"
+    is_active: bool = True
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+def _create_demo_officer() -> DemoOfficer:
+    """Create a demo officer instance for demo mode (no DB needed)."""
+    return DemoOfficer()
 
 
 async def get_current_user(
@@ -78,18 +104,36 @@ async def get_current_user(
             detail="Invalid officer ID in token",
         )
 
+    # --- DEMO BYPASS: Return mock officer without DB lookup ---
+    if officer_id == _DEMO_UUID:
+        logger.debug("Demo user bypass — returning mock Officer")
+        return _create_demo_officer()
+
     # 4. Check Redis session (if Redis is available)
     if redis:
-        session = await redis.get(f"session:{officer_id}")
-        if not session:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session expired or logged out — please log in again",
-            )
+        try:
+            session = await redis.get(f"session:{officer_id}")
+            if not session:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session expired or logged out — please log in again",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            # Redis connection failed — skip session check
+            logger.warning("Redis unavailable — skipping session check")
 
     # 5. Load officer from DB
-    repo = OfficerRepository(db)
-    officer = await repo.get_by_id(officer_id)
+    try:
+        repo = OfficerRepository(db)
+        officer = await repo.get_by_id(officer_id)
+    except Exception as e:
+        logger.error(f"DB error loading officer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable",
+        )
 
     if not officer:
         raise HTTPException(
@@ -104,3 +148,4 @@ async def get_current_user(
         )
 
     return officer
+

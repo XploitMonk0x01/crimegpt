@@ -29,7 +29,7 @@ class DatabaseSettings(BaseSettings):
     max_overflow: int = Field(default=20, alias="DB_MAX_OVERFLOW")
     echo: bool = Field(default=False, alias="DB_ECHO")
 
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {"env_prefix": "", "extra": "ignore", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 class RedisSettings(BaseSettings):
@@ -38,7 +38,7 @@ class RedisSettings(BaseSettings):
     url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     session_ttl_seconds: int = Field(default=28800, alias="REDIS_SESSION_TTL")  # 8 hours
 
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {"env_prefix": "", "extra": "ignore", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 class AuthSettings(BaseSettings):
@@ -49,7 +49,7 @@ class AuthSettings(BaseSettings):
     jwt_expiry_hours: int = Field(default=8, alias="JWT_EXPIRY_HOURS")
     refresh_token_expiry_days: int = Field(default=7, alias="REFRESH_TOKEN_EXPIRY_DAYS")
 
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {"env_prefix": "", "extra": "ignore", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 class LLMSettings(BaseSettings):
@@ -89,7 +89,7 @@ class LLMSettings(BaseSettings):
     ollama_base_url: str = Field(default="http://ollama:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="mistral:7b-instruct", alias="OLLAMA_MODEL")
 
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {"env_prefix": "", "extra": "ignore", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 class ChromaSettings(BaseSettings):
@@ -99,7 +99,7 @@ class ChromaSettings(BaseSettings):
     port: int = Field(default=8001, alias="CHROMA_PORT")
     collection_name: str = Field(default="legal_corpus", alias="CHROMA_COLLECTION")
 
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {"env_prefix": "", "extra": "ignore", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 class SentrySettings(BaseSettings):
@@ -109,7 +109,7 @@ class SentrySettings(BaseSettings):
     traces_sample_rate: float = Field(default=1.0, alias="SENTRY_TRACES_SAMPLE_RATE")
     environment: str = Field(default="development", alias="SENTRY_ENVIRONMENT")
 
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {"env_prefix": "", "extra": "ignore", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 class EvidenceSettings(BaseSettings):
@@ -118,7 +118,7 @@ class EvidenceSettings(BaseSettings):
     storage_path: str = Field(default="./storage/evidence", alias="EVIDENCE_STORAGE_PATH")
     max_file_size_mb: int = Field(default=50, alias="EVIDENCE_MAX_FILE_SIZE_MB")
 
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {"env_prefix": "", "extra": "ignore", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 class Settings(BaseSettings):
