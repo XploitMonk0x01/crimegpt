@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import LexBot from './components/LexBot';
 import FIRAutomator from './components/FIRAutomator';
@@ -22,7 +22,7 @@ export default function App() {
           if (response.success) {
             setAuth(response.data, localStorage.getItem('token'));
           }
-        } catch (err) {
+        } catch {
           logout();
         }
       }

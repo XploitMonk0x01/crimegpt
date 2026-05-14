@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, FileText, CheckCircle, XCircle, Clock, ArrowRight, AlertTriangle } from 'lucide-react';
+import { FileText, AlertTriangle } from 'lucide-react';
 import { dashboardService } from '../services/api';
 
 const StatCard = ({ label, value, detail, loading }) => (
@@ -38,7 +38,9 @@ const StatusBadge = ({ status }) => {
 
 function formatTimeAgo(isoString) {
   if (!isoString) return '';
-  const diff = Date.now() - new Date(isoString).getTime();
+  const timestamp = new Date(isoString).getTime();
+  if (Number.isNaN(timestamp)) return '';
+  const diff = Date.now() - timestamp;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'Just now';
   if (mins < 60) return `${mins} min ago`;
@@ -53,22 +55,24 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        setLoading(true);
-        const response = await dashboardService.getOfficerDashboard();
-        if (response.success) {
-          setData(response.data);
-        }
-      } catch (err) {
-        console.error('Dashboard fetch failed:', err);
-        setError(err.response?.data?.detail || 'Failed to load dashboard');
-      } finally {
-        setLoading(false);
+  const fetchDashboard = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await dashboardService.getOfficerDashboard();
+      if (response.success) {
+        setData(response.data);
       }
-    };
-    fetchDashboard();
+    } catch (err) {
+      console.error('Dashboard fetch failed:', err);
+      setError(err.response?.data?.detail || 'Failed to load dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    queueMicrotask(fetchDashboard);
   }, []);
 
   const stats = data?.fir_stats || {};
@@ -144,9 +148,14 @@ export default function Dashboard() {
       <section className="px-6 py-8">
         <div className="flex items-end justify-between mb-4">
           <h2 className="text-4xl font-bold tracking-tighter uppercase text-foreground/80">Recent FIRs</h2>
-          <button className="label-mono border-b border-accent/50 pb-0.5 hover:text-accent transition-all text-muted-foreground">
-            View all
-          </button>
+          {error && (
+            <button
+              onClick={fetchDashboard}
+              className="label-mono border-b border-accent/50 pb-0.5 hover:text-accent transition-all text-muted-foreground"
+            >
+              Retry
+            </button>
+          )}
         </div>
 
         <div className="space-y-0 border-t border-border">

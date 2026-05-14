@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Mic, FileText, ArrowRight, Loader2, Clock } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Mic, FileText, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { firService } from '../services/api';
+import { firService, nlpService } from '../services/api';
 
 const FormSection = ({ id, title, children }) => (
   <div className="border-t border-border py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 group">
@@ -66,8 +66,16 @@ function formatTimeAgo(iso) {
 
 export default function FIRAutomator() {
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [audioError, setAudioError] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState('');
+  const [draftNarrative, setDraftNarrative] = useState('');
+  const [recommendedSections, setRecommendedSections] = useState([]);
   const [narrative, setNarrative] = useState('');
+  const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const [formData, setFormData] = useState({
     complainant_name: '', complainant_contact: '', complainant_address: '',
     complainant_id: '', incident_location: '', incident_time: ''
@@ -80,32 +88,125 @@ export default function FIRAutomator() {
       try {
         const r = await firService.list({ pageSize: 10 });
         if (r.success) setRecentFirs(r.data || []);
-      } catch (err) { /* Backend may not be running */ }
+      } catch { /* Backend may not be running */ }
       finally { setLoadingFirs(false); }
     };
     fetchFirs();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  const getSupportedMimeType = () => {
+    if (typeof MediaRecorder === 'undefined') return '';
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+    return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+  };
+
+  const startRecording = async () => {
+    setAudioError('');
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setAudioError('Voice input is not supported in this browser.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const mimeType = getSupportedMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      recorder.onerror = () => {
+        setAudioError('Audio recording failed. Please try again.');
+      };
+
+      recorder.onstop = async () => {
+        const chunks = audioChunksRef.current;
+        mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        setIsRecording(false);
+
+        if (!chunks.length) {
+          setAudioError('No audio was captured.');
+          return;
+        }
+
+        setIsTranscribing(true);
+        try {
+          const audioBlob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+          const response = await nlpService.transcribe(audioBlob, {
+            language: 'en',
+            prompt: 'Indian police FIR incident narration with names, locations, dates, and offence details.',
+          });
+          const transcript = response.data?.text?.trim();
+          if (!transcript) {
+            setAudioError('No speech was detected in the recording.');
+            return;
+          }
+          setNarrative((current) => [current.trim(), transcript].filter(Boolean).join('\n'));
+        } catch (err) {
+          setAudioError(err.response?.data?.detail || 'Transcription failed. Check the Groq API key and try again.');
+        } finally {
+          setIsTranscribing(false);
+          audioChunksRef.current = [];
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      setAudioError(err.name === 'NotAllowedError' ? 'Microphone permission was denied.' : 'Unable to access microphone.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const handleVoiceInput = () => {
+    if (isRecording) stopRecording();
+    else startRecording();
+  };
+
   const handleGenerate = async () => {
     if (!narrative.trim()) return;
     setIsGenerating(true);
+    setGenerationError('');
+    setDraftNarrative('');
+    setRecommendedSections([]);
     try {
       const response = await firService.generate(narrative);
       if (response.success) {
-        const data = response.data.structured_data || {};
-        setFormData({
-          complainant_name: data.complainant?.name || '',
-          complainant_contact: data.complainant?.contact || '',
-          complainant_address: data.complainant?.address || '',
-          complainant_id: data.complainant?.id_proof || '',
-          incident_location: data.incident?.location || '',
-          incident_time: data.incident?.time || ''
-        });
-        // Refresh list after generation
+        const draft = response.data || {};
+        const entities = draft.extracted_entities || {};
+        const firstLocation = Array.isArray(entities.locations) ? entities.locations[0] : '';
+        setDraftNarrative(draft.ai_narrative || '');
+        setRecommendedSections(draft.recommended_sections || []);
+        setFormData((current) => ({
+          ...current,
+          incident_location: firstLocation || current.incident_location,
+        }));
         firService.list({ pageSize: 10 }).then(r => { if (r.success) setRecentFirs(r.data || []); }).catch(() => {});
       }
-    } catch (err) { console.error("AI Generation Failed", err); }
-    finally { setIsGenerating(false); }
+    } catch (err) {
+      setGenerationError(err.response?.data?.detail || 'AI generation failed. Please verify the backend and Groq configuration.');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const updateField = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
@@ -120,14 +221,19 @@ export default function FIRAutomator() {
         </div>
         <div className="flex flex-col items-start gap-4">
           <button 
-            onClick={() => setIsRecording(!isRecording)}
+            onClick={handleVoiceInput} disabled={isTranscribing}
             className={`flex items-center gap-2 px-6 py-3 font-bold text-base uppercase tracking-tighter transition-all border-2 ${
               isRecording ? 'bg-accent border-accent text-background animate-pulse' : 'bg-background border-foreground/50 text-foreground/80 hover:bg-foreground hover:text-background'
             }`}
           >
             <Mic size={18} />
-            {isRecording ? 'Listening' : 'Voice Input'}
+            {isTranscribing ? 'Transcribing...' : isRecording ? 'Stop Recording' : 'Voice Input'}
           </button>
+          {(audioError || isRecording) && (
+            <p className={`label-mono text-[9px] ${audioError ? 'text-accent' : 'text-muted-foreground/50'}`}>
+              {audioError || 'Recording incident audio. Click stop when finished.'}
+            </p>
+          )}
         </div>
       </header>
 
@@ -153,6 +259,38 @@ export default function FIRAutomator() {
         <InputField label="Exact Location" placeholder="CRIME SCENE / LANDMARK" value={formData.incident_location} onChange={(v) => updateField('incident_location', v)} />
         <InputField label="Date & Time" type="datetime-local" value={formData.incident_time} onChange={(v) => updateField('incident_time', v)} />
       </FormSection>
+      {generationError && (
+        <div className="border border-accent/30 bg-accent/10 p-4 mb-8">
+          <p className="label-mono text-[10px] text-accent">{generationError}</p>
+        </div>
+      )}
+
+      {(draftNarrative || recommendedSections.length > 0) && (
+        <section className="border-t border-border py-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-4">
+            <span className="label-mono text-[10px] text-accent/70 mb-2 block">AI Output</span>
+            <h3 className="text-3xl font-bold tracking-tighter uppercase leading-none text-foreground/80">Draft Review</h3>
+          </div>
+          <div className="lg:col-span-8 space-y-5">
+            {recommendedSections.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {recommendedSections.map((section) => (
+                  <span key={section} className="label-mono text-[9px] border border-accent/40 text-accent px-2 py-1">
+                    {section}
+                  </span>
+                ))}
+              </div>
+            )}
+            {draftNarrative && (
+              <textarea
+                value={draftNarrative}
+                onChange={(event) => setDraftNarrative(event.target.value)}
+                className="w-full min-h-[220px] bg-muted/40 border border-border p-4 text-sm leading-relaxed text-foreground/80 focus:outline-none focus:border-accent/50"
+              />
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Actions */}
       <div className="py-16 border-t border-border flex flex-col md:flex-row justify-between items-center gap-12">
@@ -162,7 +300,7 @@ export default function FIRAutomator() {
         <div className="flex gap-8">
           <button className="label-mono text-base border-b-2 border-border/50 pb-1 hover:border-accent transition-all text-muted-foreground">Save Draft</button>
           <button 
-            onClick={handleGenerate} disabled={isGenerating || !narrative}
+            onClick={handleGenerate} disabled={isGenerating || isRecording || isTranscribing || !narrative.trim()}
             className="flex items-center gap-3 px-8 py-4 bg-accent text-background font-bold text-lg uppercase tracking-tighter hover:bg-foreground transition-all disabled:opacity-50"
           >
             {isGenerating ? <><span>Analysing...</span><Loader2 size={20} className="animate-spin" /></> : <><span>Generate FIR</span><ArrowRight size={20} /></>}

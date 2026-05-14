@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link2, Search, Loader2, GitBranch, ArrowRight } from 'lucide-react';
 import { caseService, firService } from '../services/api';
