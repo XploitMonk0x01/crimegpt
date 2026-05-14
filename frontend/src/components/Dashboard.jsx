@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, FileText, CheckCircle, XCircle, Clock, ArrowRight, AlertTriangle } from 'lucide-react';
+import { FileText, AlertTriangle } from 'lucide-react';
 import { dashboardService } from '../services/api';
 
 const StatCard = ({ label, value, detail, loading }) => (

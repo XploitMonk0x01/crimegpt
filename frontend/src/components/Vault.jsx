@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Upload, Shield, CheckCircle, Eye, Loader2 } from 'lucide-react';
 import { evidenceService, firService } from '../services/api';

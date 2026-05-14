@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Mic, FileText, ArrowRight, Loader2, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Mic, FileText, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { firService } from '../services/api';
 
@@ -80,7 +80,7 @@ export default function FIRAutomator() {
       try {
         const r = await firService.list({ pageSize: 10 });
         if (r.success) setRecentFirs(r.data || []);
-      } catch (err) { /* Backend may not be running */ }
+      } catch { /* Backend may not be running */ }
       finally { setLoadingFirs(false); }
     };
     fetchFirs();
