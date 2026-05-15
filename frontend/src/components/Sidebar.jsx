@@ -11,7 +11,7 @@ import {
   Shield
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab }) {
+export default function Sidebar({ activeTab, setActiveTab, onSettingsClick }) {
   const [width, setWidth] = useState(220); // slightly wider so CrimeGPT label doesn't clip
   const [isResizing, setIsResizing] = useState(false);
   const isCollapsed = width <= 80;
@@ -117,7 +117,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
 
       {/* Footer / Settings */}
       <div className="p-3 border-t border-border overflow-hidden">
-        <button className={`w-full flex items-center gap-4 px-4 py-3 text-muted-foreground hover:bg-muted hover:text-foreground transition-all ${isCollapsed ? 'justify-center px-0' : ''}`}>
+        <button onClick={onSettingsClick} className={`w-full flex items-center gap-4 px-4 py-3 text-muted-foreground hover:bg-muted hover:text-foreground transition-all ${isCollapsed ? 'justify-center px-0' : ''}`}>
           <Settings size={18} className="shrink-0" />
           {!isCollapsed && (
             <span className="label-mono text-[10px] uppercase font-bold tracking-widest truncate">Settings</span>

@@ -6,12 +6,14 @@ import Dashboard from './components/Dashboard';
 import Vault from './components/Vault';
 import CaseLinkage from './components/CaseLinkage';
 import Login from './components/Login';
+import UserSettings from './components/UserSettings';
 import { motion, AnimatePresence } from 'framer-motion';
 import useAuthStore from './store/authStore';
 import { authService } from './services/api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { isAuthenticated, user, setAuth, logout } = useAuthStore();
 
   useEffect(() => {
@@ -36,7 +38,8 @@ export default function App() {
 
   return (
     <div className="flex bg-background text-foreground min-h-screen">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onSettingsClick={() => setSettingsOpen(true)} />
+      <UserSettings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       
       <main className="flex-1 h-screen flex flex-col overflow-hidden">
         {/* Header - Minimalist */}
