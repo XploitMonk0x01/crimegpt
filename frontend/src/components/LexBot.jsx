@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Paperclip, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { legalService } from '../services/api';
 
@@ -81,7 +81,19 @@ export default function LexBot() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [attachments, setAttachments] = useState([]);
   const scrollRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const handleAttach = (e) => {
+    const files = Array.from(e.target.files);
+    setAttachments(prev => [...prev, ...files].slice(0, 5)); // max 5 files
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -174,24 +186,59 @@ export default function LexBot() {
         >
           <div className={`mx-auto transition-all duration-500 ${hasStarted ? 'max-w-5xl' : 'max-w-2xl'}`}>
             <div className="relative group">
+              {/* Hidden file input */}
               <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Ask anything related to BNS 2023"
-                className={`w-full bg-muted border-none tracking-tight placeholder:text-muted-foreground/20 focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all text-foreground/80 ${!hasStarted
-                    ? 'text-center text-base px-8 py-3.5 shadow-2xl border border-border/20'
-                    : 'text-sm px-6 py-2.5 shadow-none'
-                  }`}
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleAttach}
+                accept="image/*,.pdf,.doc,.docx,.txt"
               />
-              <button
-                onClick={handleSend}
-                className={`absolute top-1/2 -translate-y-1/2 bg-accent text-background hover:bg-foreground hover:text-background transition-all ${hasStarted ? 'right-2 p-2' : 'right-3 p-2.5'
-                  }`}
-              >
-                <Send size={hasStarted ? 14 : 18} />
-              </button>
+
+              {/* Attachment chips */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {attachments.map((file, i) => (
+                    <div key={i} className="flex items-center gap-1.5 bg-muted border border-border/50 px-2 py-1 text-[10px] label-mono text-muted-foreground">
+                      <Paperclip size={9} className="text-accent" />
+                      <span className="max-w-[120px] truncate">{file.name}</span>
+                      <button onClick={() => removeAttachment(i)} className="hover:text-accent transition-colors">
+                        <X size={9} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Input row */}
+              <div className="relative flex items-center">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Attach file"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-accent transition-colors z-10"
+                >
+                  <Paperclip size={14} />
+                </button>
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder="Ask anything related to BNS 2023"
+                  className={`w-full bg-muted border-none tracking-tight placeholder:text-muted-foreground/20 focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all text-foreground/80 ${!hasStarted
+                      ? 'text-center text-base px-8 py-3.5 shadow-2xl border border-border/20'
+                      : 'text-sm pl-8 pr-12 py-2.5 shadow-none'
+                    }`}
+                />
+                <button
+                  onClick={handleSend}
+                  className={`absolute top-1/2 -translate-y-1/2 bg-accent text-background hover:bg-foreground hover:text-background transition-all ${hasStarted ? 'right-2 p-2' : 'right-3 p-2.5'
+                    }`}
+                >
+                  <Send size={hasStarted ? 14 : 18} />
+                </button>
+              </div>
             </div>
 
 
