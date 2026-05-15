@@ -54,7 +54,7 @@ export const authService = {
 // ─────────────── FIR Service ───────────────
 export const firService = {
   generate: async (description) => {
-    const response = await api.post('/fir/generate', { incident_desc: description });
+    const response = await api.post('/fir/generate', { incident_description: description });
     return response.data;
   },
   submit: async (data) => {

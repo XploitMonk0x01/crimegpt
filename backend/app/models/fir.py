@@ -44,7 +44,7 @@ class FIR(Base):
     accused: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Incident details
-    incident_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    incident_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     incident_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -92,6 +92,7 @@ class FIR(Base):
 
     # Relationships
     officer = relationship("Officer", back_populates="firs", foreign_keys=[officer_id])
+    approver = relationship("Officer", foreign_keys=[approved_by])
     evidence_items = relationship("Evidence", back_populates="fir", lazy="selectin")
     case_links_a = relationship(
         "CaseLink",

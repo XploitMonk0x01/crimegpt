@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mic, FileText, ArrowRight, Loader2, X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import PhoneInput from 'react-phone-number-input';
+import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { firService } from '../services/api';
 import useFirStore from '../store/firStore';
@@ -104,21 +104,30 @@ export default function FIRAutomator() {
     try {
       const response = await firService.generate(narrative);
       if (response.success) {
-        const data = response.data.structured_data || {};
+        const data = response.data;
+        const entities = data.extracted_entities || {};
+        const complainant = data.suggested_complainant || {};
+        
         setFormData({
-          complainant_name: data.complainant?.name || '',
-          complainant_contact: data.complainant?.contact || '',
-          complainant_address: data.complainant?.address || '',
-          complainant_id: data.complainant?.id_proof || '',
-          incident_location: data.incident?.location || '',
-          incident_time: data.incident?.time || ''
+          complainant_name: complainant.name || '',
+          complainant_contact: complainant.contact || '',
+          complainant_address: complainant.address || '',
+          complainant_id: complainant.id_number || '',
+          incident_location: (entities.locations && entities.locations[0]) || '',
+          incident_time: '' // LLM usually won't extract a valid datetime-local string easily
         });
-        // Refresh list after generation
-        firService.list({ pageSize: 10 }).then(r => { if (r.success) setRecentFirs(r.data || []); }).catch(() => {});
+        
+        // Update narrative with AI version if available
+        if (data.ai_narrative) setNarrative(data.ai_narrative);
+        
+        // Refresh list if needed (though generation doesn't create a record yet)
       }
     } catch (err) { 
       console.error("AI Generation Failed", err); 
-      alert(err.response?.data?.detail?.[0]?.msg || "AI Generation failed. Ensure the narrative is at least 20 characters long.");
+      const errMsg = err.response?.data?.errors?.[0]?.message 
+                 || err.response?.data?.message 
+                 || "AI Generation failed. Ensure the narrative is at least 20 characters long.";
+      alert(errMsg);
     }
     finally { setIsGenerating(false); }
   };
@@ -205,7 +214,7 @@ export default function FIRAutomator() {
       {/* Form Sections */}
       <FormSection id="01" title="Complainant">
         <InputField label="Full Name" placeholder="ENTER NAME" value={formData.complainant_name} onChange={(v) => updateField('complainant_name', v)} />
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
           <label className="label-mono text-[8px] text-muted-foreground">Contact</label>
           <PhoneInput
             international
@@ -214,8 +223,25 @@ export default function FIRAutomator() {
             placeholder="+91 XXXX-XXXXXX"
             value={formData.complainant_contact}
             onChange={(v) => updateField('complainant_contact', v || '')}
-            className="bg-muted/50 border-none p-3.5 text-sm font-normal tracking-tight focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all text-foreground/80 [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:focus:outline-none [&_.PhoneInputInput]:min-h-[24px]"
+            className={`bg-muted/50 border-none p-3.5 text-sm font-normal tracking-tight focus:outline-none focus:ring-1 transition-all text-foreground/80 [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:focus:outline-none [&_.PhoneInputInput]:min-h-[24px] ${
+              formData.complainant_contact
+                ? isValidPhoneNumber(formData.complainant_contact)
+                  ? 'focus:ring-green-500/40'
+                  : 'focus:ring-red-500/40'
+                : 'focus:ring-accent/40'
+            }`}
           />
+          {formData.complainant_contact && (
+            <p className={`label-mono text-[8px] mt-1 ${
+              isValidPhoneNumber(formData.complainant_contact)
+                ? 'text-green-500'
+                : 'text-red-400'
+            }`}>
+              {isValidPhoneNumber(formData.complainant_contact)
+                ? '✓ Valid number'
+                : '✗ Invalid number for selected country'}
+            </p>
+          )}
         </div>
         <InputField label="Address" placeholder="FULL RESIDENTIAL ADDRESS" fullWidth value={formData.complainant_address} onChange={(v) => updateField('complainant_address', v)} />
         {/* Identity Type + Number */}

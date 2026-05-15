@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Upload, Shield, CheckCircle, Eye, Loader2 } from 'lucide-react';
+import { Database, Upload, Shield, CheckCircle, Eye, Loader2, X } from 'lucide-react';
 import { evidenceService, firService } from '../services/api';
 
 export default function Vault() {
@@ -16,6 +16,13 @@ export default function Vault() {
   const [verifyData, setVerifyData] = useState(null);
   const [loadingCustody, setLoadingCustody] = useState(false);
   const [loadingVerify, setLoadingVerify] = useState(false);
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+
+  const filteredFirs = firs.filter(f => 
+    (f.fir_number?.toLowerCase().includes(query.toLowerCase())) ||
+    (f.id.toLowerCase().includes(query.toLowerCase()))
+  ).slice(0, 10);
 
   useEffect(() => {
     firService.list({ pageSize: 50 }).then(r => {
@@ -67,15 +74,71 @@ export default function Vault() {
         </div>
         <div className="lg:col-span-8">
           <form onSubmit={handleUpload} className="space-y-6">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 relative">
               <label className="label-mono text-[8px] text-muted-foreground/50">Linked FIR</label>
-              {firs.length > 0 ? (
-                <select value={selectedFir} onChange={e => setSelectedFir(e.target.value)} className={inputCls}>
-                  <option value="">Select FIR...</option>
-                  {firs.map(f => <option key={f.id} value={f.id}>{f.fir_number || f.id.slice(0,8)}</option>)}
-                </select>
-              ) : (
-                <input type="text" value={selectedFir} onChange={e => setSelectedFir(e.target.value)} placeholder="Enter FIR UUID" className={inputCls} />
+              <div className="relative">
+                <input 
+                  type="text" 
+                  value={query} 
+                  onFocus={() => setIsOpen(true)}
+                  onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+                  onChange={e => {
+                    setQuery(e.target.value);
+                    setSelectedFir(e.target.value); 
+                    setIsOpen(true);
+                  }} 
+                  placeholder="Type FIR Number or UUID..." 
+                  className={`w-full ${inputCls}`} 
+                />
+                {query && (
+                  <button 
+                    type="button"
+                    onClick={() => { setQuery(''); setSelectedFir(''); setIsOpen(false); }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 hover:text-accent transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                <AnimatePresence>
+                  {isOpen && filteredFirs.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute left-0 right-0 top-full mt-1 bg-background border border-border z-50 shadow-2xl max-h-48 overflow-y-auto custom-scrollbar"
+                    >
+                      {filteredFirs.map(f => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => {
+                            setQuery(f.fir_number || f.id.slice(0, 8));
+                            setSelectedFir(f.id);
+                            setIsOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b border-border/50 last:border-none flex justify-between items-center group"
+                        >
+                          <div>
+                            <p className="font-bold text-xs uppercase tracking-tighter group-hover:text-accent transition-colors">
+                              {f.fir_number || 'UNNAMED FIR'}
+                            </p>
+                            <p className="label-mono text-[8px] text-muted-foreground">
+                              {f.id.slice(0, 18)}...
+                            </p>
+                          </div>
+                          <p className="label-mono text-[7px] border border-border px-1.5 py-0.5 opacity-50 group-hover:border-accent group-hover:text-accent transition-all">
+                            SELECT
+                          </p>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              {selectedFir && selectedFir !== query && (
+                <p className="label-mono text-[7px] text-accent mt-1">
+                  LINKED ID: {selectedFir}
+                </p>
               )}
             </div>
             <div className="flex flex-col gap-2">

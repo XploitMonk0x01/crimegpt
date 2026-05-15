@@ -52,7 +52,7 @@ class Officer(Base):
     )
 
     # Relationships
-    firs = relationship("FIR", back_populates="officer", lazy="selectin", foreign_keys="[FIR.officer_id]")
+    firs = relationship("FIR", back_populates="officer", lazy="selectin", foreign_keys="FIR.officer_id")
     evidence_uploads = relationship("Evidence", back_populates="officer", lazy="selectin")
 
     def __repr__(self) -> str:

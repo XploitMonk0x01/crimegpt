@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import String, Text, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, INET
+from sqlalchemy.dialects.postgresql import UUID, INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -41,14 +41,14 @@ class AuditLog(Base):
     )
 
     # Additional context (e.g., "Changed status from draft to submitted")
-    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Request metadata
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Immutable timestamp
-    timestamp: Mapped[datetime] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         index=True,
@@ -58,4 +58,4 @@ class AuditLog(Base):
     officer = relationship("Officer", foreign_keys=[officer_id])
 
     def __repr__(self) -> str:
-        return f"<AuditLog {self.action} by {self.officer_id} at {self.timestamp}>"
+        return f"<AuditLog {self.action} by {self.officer_id} at {self.created_at}>"
