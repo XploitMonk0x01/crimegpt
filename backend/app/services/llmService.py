@@ -16,6 +16,9 @@ Usage:
 import logging
 from typing import Any
 
+import httpx
+from groq import AsyncGroq
+
 from app.config import get_settings
 
 logger = logging.getLogger("crimegpt.llm")
@@ -97,8 +100,6 @@ class LLMService:
             return self._mock_response(user_prompt)
 
         try:
-            from groq import AsyncGroq
-
             client = AsyncGroq(api_key=api_key)
 
             kwargs: dict[str, Any] = {
@@ -123,9 +124,6 @@ class LLMService:
             )
             return content
 
-        except ImportError:
-            logger.error("groq package not installed — pip install groq")
-            return self._mock_response(user_prompt)
         except Exception as e:
             logger.error(f"Groq API error with {model}: {e}")
             # Auto-fallback: try fallback model before returning mock
@@ -154,8 +152,6 @@ class LLMService:
         model = self._settings.llm.ollama_model
 
         try:
-            import httpx
-
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     f"{base_url}/api/generate",
@@ -176,9 +172,6 @@ class LLMService:
                 logger.info(f"Ollama [{model}] generated {len(content)} chars")
                 return content
 
-        except ImportError:
-            logger.error("httpx package not installed — pip install httpx")
-            return self._mock_response(user_prompt)
         except Exception as e:
             logger.error(f"Ollama error: {e}")
             return self._mock_response(user_prompt)
@@ -192,6 +185,48 @@ class LLMService:
             f"This response will be replaced with real AI-generated content "
             f"once an LLM provider is configured."
         )
+
+    async def transcribe_audio(
+        self,
+        *,
+        file_bytes: bytes,
+        filename: str,
+        content_type: str | None = None,
+        language: str | None = None,
+        prompt: str | None = None,
+    ) -> dict[str, Any]:
+        """Transcribe an audio clip with Groq Whisper."""
+        api_key = self._settings.llm.groq_api_key
+        if not api_key:
+            raise RuntimeError("GROQ_API_KEY not configured")
+        if not file_bytes:
+            raise ValueError("Audio file is empty")
+
+        try:
+            client = AsyncGroq(api_key=api_key)
+            transcription = await client.audio.transcriptions.create(
+                file=(filename, file_bytes, content_type or "application/octet-stream"),
+                model=self._settings.llm.groq_model_whisper,
+                language=language or None,
+                prompt=prompt or None,
+                response_format="json",
+                temperature=0.0,
+            )
+            text = getattr(transcription, "text", "") or ""
+            logger.info(
+                "Groq Whisper [%s] transcribed %s bytes into %s chars",
+                self._settings.llm.groq_model_whisper,
+                len(file_bytes),
+                len(text),
+            )
+            return {
+                "text": text,
+                "model": self._settings.llm.groq_model_whisper,
+                "language": language,
+            }
+        except Exception:
+            logger.exception("Groq transcription failed")
+            raise
 
     async def health_check(self) -> dict[str, Any]:
         """Check LLM provider health."""
@@ -212,7 +247,6 @@ class LLMService:
             result["provider"] = "Ollama"
             result["model"] = self._settings.llm.ollama_model
             try:
-                import httpx
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     resp = await client.get(f"{self._settings.llm.ollama_base_url}/api/tags")
                     result["healthy"] = resp.status_code == 200
