@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import String, Text, DateTime, ForeignKey, Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from app.db.session import Base
 from app.types.enums import FIRStatus
@@ -58,6 +58,27 @@ class FIR(Base):
     # AI-generated content
     ai_narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_sections_rationale: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # Public API aliases used by service/schema layers. Keep database column names
+    # stable while exposing clearer domain names throughout the application.
+    fir_number = synonym("fir_no")
+    incident_description = synonym("incident_desc")
+    incident_location = synonym("location")
+    approved_by_id = synonym("approved_by")
+
+    @property
+    def ai_recommended_sections(self) -> list[str] | None:
+        if not self.ai_sections_rationale:
+            return None
+        sections = self.ai_sections_rationale.get("recommended_sections")
+        return sections if isinstance(sections, list) else None
+
+    @ai_recommended_sections.setter
+    def ai_recommended_sections(self, value: list[str] | None) -> None:
+        if value is None:
+            self.ai_sections_rationale = None
+        else:
+            self.ai_sections_rationale = {"recommended_sections": value}
 
     # Lifecycle
     status: Mapped[FIRStatus] = mapped_column(

@@ -159,8 +159,15 @@ export const caseService = {
 
 // ─────────────── NLP Service ───────────────
 export const nlpService = {
-  transcribe: async () => {
-    const response = await api.post('/nlp/transcribe');
+  transcribe: async (audioBlob, { language = 'en', prompt } = {}) => {
+    const formData = new FormData();
+    const extension = audioBlob.type?.includes('webm') ? 'webm' : 'wav';
+    formData.append('file', audioBlob, `incident-audio.${extension}`);
+    if (language) formData.append('language', language);
+    if (prompt) formData.append('prompt', prompt);
+    const response = await api.post('/nlp/transcribe', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   },
   translate: async () => {
