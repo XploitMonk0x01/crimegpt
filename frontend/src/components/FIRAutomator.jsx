@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Mic, FileText, ArrowRight, Loader2, X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import PhoneInput from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
 import { firService } from '../services/api';
 import useFirStore from '../store/firStore';
 
@@ -20,7 +22,7 @@ const FormSection = ({ id, title, children }) => (
 
 const InputField = ({ label, placeholder, type = "text", multiline = false, fullWidth = false, value, onChange }) => (
   <div className={`flex flex-col gap-4 ${fullWidth ? 'md:col-span-2' : ''}`}>
-    <label className="label-mono text-[8px] text-muted-foreground/50">{label}</label>
+    <label className="label-mono text-[8px] text-muted-foreground">{label}</label>
     {multiline ? (
       <textarea 
         rows={3}
@@ -72,7 +74,7 @@ export default function FIRAutomator() {
   const [narrative, setNarrative] = useState('');
   const [formData, setFormData] = useState({
     complainant_name: '', complainant_contact: '', complainant_address: '',
-    complainant_id: '', incident_location: '', incident_time: ''
+    complainant_id: '', complainant_id_type: '', incident_location: '', incident_time: ''
   });
   const [loadingFirs, setLoadingFirs] = useState(false);
   const [selectedFir, setSelectedFir] = useState(null);
@@ -137,6 +139,7 @@ export default function FIRAutomator() {
           name: formData.complainant_name || 'Unknown',
           contact: formData.complainant_contact || '',
           address: formData.complainant_address || '',
+          id_type: formData.complainant_id_type || '',
           id_proof: formData.complainant_id || '',
         },
       };
@@ -145,7 +148,7 @@ export default function FIRAutomator() {
       setNarrative('');
       setFormData({
         complainant_name: '', complainant_contact: '', complainant_address: '',
-        complainant_id: '', incident_location: '', incident_time: ''
+        complainant_id: '', complainant_id_type: '', incident_location: '', incident_time: ''
       });
 
       // Best-effort backend sync
@@ -191,7 +194,7 @@ export default function FIRAutomator() {
 
       {/* Narrative */}
       <div className="border-t-4 border-foreground/10 pt-6 pb-8">
-        <p className="label-mono mb-2 text-muted-foreground/40 text-[8px]">Incident Narrative (Natural Language Input)</p>
+        <p className="label-mono mb-2 text-muted-foreground text-[8px]">Incident Narrative (Natural Language Input)</p>
         <textarea 
           value={narrative} onChange={(e) => setNarrative(e.target.value)}
           className="w-full bg-transparent border border-foreground/10 rounded-md p-3 text-lg md:text-xl font-medium tracking-tight placeholder:text-muted-foreground/10 focus:outline-none focus:border-foreground/30 min-h-[120px] leading-relaxed text-foreground/70"
@@ -202,9 +205,36 @@ export default function FIRAutomator() {
       {/* Form Sections */}
       <FormSection id="01" title="Complainant">
         <InputField label="Full Name" placeholder="ENTER NAME" value={formData.complainant_name} onChange={(v) => updateField('complainant_name', v)} />
-        <InputField label="Contact" placeholder="+91 XXXX-XXXXXX" value={formData.complainant_contact} onChange={(v) => updateField('complainant_contact', v)} />
+        <div className="flex flex-col gap-4">
+          <label className="label-mono text-[8px] text-muted-foreground">Contact</label>
+          <PhoneInput
+            international
+            withCountryCallingCode
+            defaultCountry="IN"
+            placeholder="+91 XXXX-XXXXXX"
+            value={formData.complainant_contact}
+            onChange={(v) => updateField('complainant_contact', v || '')}
+            className="bg-muted/50 border-none p-3.5 text-sm font-normal tracking-tight focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all text-foreground/80 [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:focus:outline-none [&_.PhoneInputInput]:min-h-[24px]"
+          />
+        </div>
         <InputField label="Address" placeholder="FULL RESIDENTIAL ADDRESS" fullWidth value={formData.complainant_address} onChange={(v) => updateField('complainant_address', v)} />
-        <InputField label="Identity Proof" placeholder="AADHAR / PAN / VOTER ID" value={formData.complainant_id} onChange={(v) => updateField('complainant_id', v)} />
+        {/* Identity Type + Number */}
+        <div className="flex flex-col gap-4">
+          <label className="label-mono text-[8px] text-muted-foreground">ID Type</label>
+          <select
+            value={formData.complainant_id_type}
+            onChange={(e) => updateField('complainant_id_type', e.target.value)}
+            className="bg-muted/50 border-none p-3.5 text-sm font-normal tracking-tight focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all text-foreground/80"
+          >
+            <option value="">SELECT TYPE</option>
+            <option value="Aadhaar Card">Aadhaar Card</option>
+            <option value="PAN Card">PAN Card</option>
+            <option value="Voter ID">Voter ID</option>
+            <option value="Passport">Passport</option>
+            <option value="Driving Licence">Driving Licence</option>
+          </select>
+        </div>
+        <InputField label="ID Number" placeholder="ENTER ID NUMBER" value={formData.complainant_id} onChange={(v) => updateField('complainant_id', v)} />
       </FormSection>
 
       <FormSection id="02" title="Logistics">
@@ -262,37 +292,37 @@ export default function FIRAutomator() {
               </div>
               <div className="space-y-4 border-t border-border pt-4">
                 <div>
-                  <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Status</p>
+                  <p className="label-mono text-[8px] text-muted-foreground mb-1">Status</p>
                   <StatusBadge status={selectedFir.status} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Complainant</p>
+                    <p className="label-mono text-[8px] text-muted-foreground mb-1">Complainant</p>
                     <p className="text-sm font-medium">{selectedFir.complainant?.name || '—'}</p>
                   </div>
                   <div>
-                    <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Contact</p>
+                    <p className="label-mono text-[8px] text-muted-foreground mb-1">Contact</p>
                     <p className="text-sm font-medium">{selectedFir.complainant?.contact || '—'}</p>
                   </div>
                   <div>
-                    <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Address</p>
+                    <p className="label-mono text-[8px] text-muted-foreground mb-1">Address</p>
                     <p className="text-sm font-medium">{selectedFir.complainant?.address || '—'}</p>
                   </div>
                   <div>
-                    <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Identity Proof</p>
+                    <p className="label-mono text-[8px] text-muted-foreground mb-1">Identity Proof</p>
                     <p className="text-sm font-medium">{selectedFir.complainant?.id_proof || '—'}</p>
                   </div>
                 </div>
                 <div>
-                  <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Location</p>
+                  <p className="label-mono text-[8px] text-muted-foreground mb-1">Location</p>
                   <p className="text-sm font-medium">{selectedFir.incident_location || '—'}</p>
                 </div>
                 <div>
-                  <p className="label-mono text-[8px] text-muted-foreground/50 mb-1">Filed</p>
+                  <p className="label-mono text-[8px] text-muted-foreground mb-1">Filed</p>
                   <p className="text-sm font-medium">{new Date(selectedFir.created_at).toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="label-mono text-[8px] text-muted-foreground/50 mb-2">Incident Narrative</p>
+                  <p className="label-mono text-[8px] text-muted-foreground mb-2">Incident Narrative</p>
                   <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">{selectedFir.incident_description || selectedFir.ai_narrative || '—'}</p>
                 </div>
               </div>

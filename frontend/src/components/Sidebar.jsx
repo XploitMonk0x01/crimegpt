@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab }) {
-  const [width, setWidth] = useState(192); // Default w-48
+  const [width, setWidth] = useState(220); // slightly wider so CrimeGPT label doesn't clip
   const [isResizing, setIsResizing] = useState(false);
   const isCollapsed = width <= 80;
 
@@ -52,7 +52,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
 
   const toggleCollapse = () => {
     if (isCollapsed) {
-      setWidth(192);
+      setWidth(220);
     } else {
       setWidth(64);
     }
@@ -66,7 +66,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
       {/* Brand Section */}
       <div className={`p-6 border-b border-border flex items-center justify-between h-20 ${isCollapsed ? 'px-4' : ''}`}>
         {!isCollapsed ? (
-          <div className="flex items-center gap-2 overflow-hidden">
+          <div className="flex items-center gap-2 min-w-0">
             <Shield size={18} className="text-accent shrink-0" />
             <h2 className="text-xl font-bold tracking-tighter uppercase text-foreground/90 whitespace-nowrap">CrimeGPT</h2>
           </div>
