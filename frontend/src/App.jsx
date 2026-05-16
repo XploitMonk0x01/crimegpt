@@ -10,11 +10,24 @@ import UserSettings from './components/UserSettings';
 import { motion, AnimatePresence } from 'framer-motion';
 import useAuthStore from './store/authStore';
 import { authService } from './services/api';
+import { Toaster } from 'react-hot-toast';
+import useFirStore from './store/firStore';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { isAuthenticated, user, setAuth, logout } = useAuthStore();
+  const clearAll = useFirStore(s => s.clearAll);
+
+  useEffect(() => {
+    // ONE-TIME HARD RESET FOR USER (V3)
+    const hasCleared = localStorage.getItem('crimegpt_global_wipe_v3');
+    if (!hasCleared) {
+      localStorage.clear();
+      localStorage.setItem('crimegpt_global_wipe_v3', 'true');
+      window.location.reload();
+    }
+  }, []);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -40,6 +53,25 @@ export default function App() {
     <div className="flex bg-background text-foreground min-h-screen">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onSettingsClick={() => setSettingsOpen(true)} />
       <UserSettings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: 'var(--color-background)',
+            color: 'var(--color-foreground)',
+            border: '1px solid var(--color-border)',
+            borderRadius: '0px',
+            fontSize: '12px',
+            fontFamily: 'var(--font-mono)',
+          },
+          success: {
+            iconTheme: {
+              primary: 'var(--color-accent)',
+              secondary: 'var(--color-background)',
+            },
+          },
+        }}
+      />
       
       <main className="flex-1 h-screen flex flex-col overflow-hidden">
         {/* Header - Minimalist */}

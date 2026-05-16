@@ -36,7 +36,11 @@ const useFirStore = create((set, get) => ({
     set({ localFirs: updated });
   },
 
-  getDraftCount: () => get().localFirs.filter(f => f.status === 'draft').length,
+  clearAll: () => {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(COUNTER_KEY, '0');
+    set({ localFirs: [] });
+  },
 }));
 
 export default useFirStore;

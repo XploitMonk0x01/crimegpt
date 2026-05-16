@@ -33,12 +33,6 @@ class EvidenceRepository(BaseRepository[Evidence]):
     def __init__(self, db: AsyncSession):
         super().__init__(Evidence, db)
 
-    async def get_by_fir(self, fir_id: uuid.UUID) -> list[Evidence]:
-        from sqlalchemy import select
-        stmt = select(Evidence).where(Evidence.fir_id == fir_id).order_by(Evidence.created_at.desc())
-        result = await self._db.execute(stmt)
-        return list(result.scalars().all())
-
 
 class EvidenceService:
     """Evidence management with chain-of-custody tracking."""

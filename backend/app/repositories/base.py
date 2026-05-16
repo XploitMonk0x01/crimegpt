@@ -75,17 +75,3 @@ class BaseRepository(Generic[ModelType]):
         await self._db.flush()
         await self._db.refresh(entity)
         return entity
-
-    async def update_by_id(self, id: uuid.UUID, **values: Any) -> None:
-        """Update a record by UUID primary key."""
-        stmt = (
-            update(self._model)
-            .where(self._model.id == id)
-            .values(**values)
-        )
-        await self._db.execute(stmt)
-
-    async def delete_by_id(self, id: uuid.UUID) -> None:
-        """Delete a record by UUID primary key."""
-        stmt = delete(self._model).where(self._model.id == id)
-        await self._db.execute(stmt)

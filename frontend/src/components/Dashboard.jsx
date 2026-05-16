@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { FileText, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FileText, AlertTriangle, X } from 'lucide-react';
 import { dashboardService } from '../services/api';
 import useFirStore from '../store/firStore';
 
@@ -55,6 +55,8 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedFir, setSelectedFir] = useState(null);
+  
   const localFirs = useFirStore(s => s.localFirs);
   const localDraftCount = localFirs.filter(f => f.status === 'draft').length;
 
@@ -84,11 +86,19 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="px-6 py-6 border-b border-border">
-        <p className="label-mono mb-1 text-accent/80">Active Operations</p>
-        <h1 className="text-6xl md:text-7xl font-bold tracking-tighter leading-none uppercase text-foreground/90">
-          Live Stats
-        </h1>
+      <section className="px-6 py-6 border-b border-border flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <p className="label-mono mb-1 text-accent/80">Active Operations</p>
+          <h1 className="text-6xl md:text-7xl font-bold tracking-tighter leading-none uppercase text-foreground/90">
+            Live Stats
+          </h1>
+        </div>
+        <button 
+          onClick={fetchDashboard}
+          className="label-mono text-[10px] border-2 border-foreground px-4 py-2 hover:bg-accent hover:border-accent hover:text-background transition-all uppercase font-bold"
+        >
+          Sync System
+        </button>
       </section>
 
       {/* Error Banner */}
@@ -188,6 +198,7 @@ export default function Dashboard() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
+                onClick={() => setSelectedFir(fir)}
                 className="group flex items-center justify-between py-8 border-b border-border hover:bg-muted transition-all px-4 -mx-4 cursor-pointer"
               >
                 <div className="flex items-baseline gap-6">
@@ -212,6 +223,117 @@ export default function Dashboard() {
           )}
         </div>
       </section>
+
+      {/* Detail Modal */}
+      <AnimatePresence>
+        {selectedFir && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setSelectedFir(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-muted border border-border w-full max-w-2xl max-h-[85vh] overflow-y-auto p-8 shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setSelectedFir(null)}
+                className="absolute top-6 right-6 p-2 text-muted-foreground hover:text-foreground transition-colors hover:bg-background/50 rounded-full"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="mb-10">
+                <p className="label-mono text-[10px] text-accent/70 mb-2 uppercase tracking-widest">Case Profile</p>
+                <h2 className="text-5xl font-bold tracking-tighter uppercase leading-none truncate">
+                  {selectedFir.fir_number}
+                </h2>
+                <div className="mt-4 flex items-center gap-4">
+                  <StatusBadge status={selectedFir.status} />
+                  <span className="label-mono text-[9px] text-muted-foreground/40 italic">
+                    ID: {selectedFir.id}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-12 py-8 border-y border-border/50">
+                <div className="space-y-6">
+                  <div>
+                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Complainant</p>
+                    <p className="text-xl font-bold tracking-tight uppercase">{selectedFir.complainant?.name || 'NOT SPECIFIED'}</p>
+                  </div>
+                  <div>
+                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Contact Details</p>
+                    <p className="text-base font-medium text-foreground/80">{selectedFir.complainant?.contact || selectedFir.complainant?.phone || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Identity Proof</p>
+                    <p className="text-sm font-medium text-foreground/70">{selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number || 'PENDING VERIFICATION'}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Location of Incident</p>
+                    <p className="text-xl font-bold tracking-tight uppercase">{selectedFir.incident_location || selectedFir.location || 'UNDEFINED'}</p>
+                  </div>
+                  <div>
+                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Occurrence Date</p>
+                    <p className="text-base font-medium text-foreground/80">
+                      {selectedFir.incident_date || selectedFir.created_at ? new Date(selectedFir.incident_date || selectedFir.created_at).toLocaleString() : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Reported At</p>
+                    <p className="text-sm font-medium text-foreground/70">
+                      {selectedFir.created_at ? new Date(selectedFir.created_at).toLocaleString() : '—'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-10">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="label-mono text-[9px] text-muted-foreground uppercase">Narrative Statement</p>
+                  <FileText size={14} className="text-muted-foreground/20" />
+                </div>
+                <div className="bg-background/30 p-6 border border-border/40 rounded-sm">
+                  <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap italic">
+                    "{selectedFir.incident_description || selectedFir.ai_narrative || 'No statement provided.'}"
+                  </p>
+                </div>
+              </div>
+
+              {selectedFir.sections?.length > 0 && (
+                <div className="mt-8">
+                  <p className="label-mono text-[9px] text-muted-foreground uppercase mb-3">Legal Provisions</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedFir.sections?.map((section, idx) => (
+                      <span key={idx} className="label-mono text-[9px] bg-accent/5 border border-accent/20 text-accent px-3 py-1 uppercase">
+                        {section}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-12 flex justify-end">
+                <button 
+                  onClick={() => setSelectedFir(null)}
+                  className="px-8 py-3 bg-foreground text-background font-bold text-sm uppercase tracking-widest hover:bg-accent transition-colors"
+                >
+                  Close Record
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

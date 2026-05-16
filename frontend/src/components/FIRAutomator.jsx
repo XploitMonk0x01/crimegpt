@@ -5,6 +5,7 @@ import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { firService, nlpService } from '../services/api';
 import useFirStore from '../store/firStore';
+import { toast } from 'react-hot-toast';
 
 const FormSection = ({ id, title, children }) => (
   <div className="border-t border-border py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 group">
@@ -20,7 +21,7 @@ const FormSection = ({ id, title, children }) => (
   </div>
 );
 
-const InputField = ({ label, placeholder, type = "text", multiline = false, fullWidth = false, value, onChange }) => (
+const InputField = ({ label, placeholder, type = "text", multiline = false, fullWidth = false, value, onChange, maxLength }) => (
   <div className={`flex flex-col gap-4 ${fullWidth ? 'md:col-span-2' : ''}`}>
     <label className="label-mono text-[8px] text-muted-foreground">{label}</label>
     {multiline ? (
@@ -28,6 +29,7 @@ const InputField = ({ label, placeholder, type = "text", multiline = false, full
         rows={3}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
+        maxLength={maxLength}
         className="bg-muted/50 border-none p-3.5 text-sm font-normal tracking-tight focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all placeholder:text-muted-foreground/10"
         placeholder={placeholder}
       />
@@ -36,6 +38,7 @@ const InputField = ({ label, placeholder, type = "text", multiline = false, full
         type={type}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
+        maxLength={maxLength}
         className="bg-muted/50 border-none p-3.5 text-sm font-normal tracking-tight focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all placeholder:text-muted-foreground/10"
         placeholder={placeholder}
       />
@@ -86,30 +89,22 @@ export default function FIRAutomator() {
     complainant_name: '', complainant_contact: '', complainant_address: '',
     complainant_id: '', complainant_id_type: '', incident_location: '', incident_time: ''
   });
-  const [loadingFirs, setLoadingFirs] = useState(false);
   const [selectedFir, setSelectedFir] = useState(null);
 
   const localFirs = useFirStore(s => s.localFirs);
   const addFir = useFirStore(s => s.addFir);
   const deleteFir = useFirStore(s => s.deleteFir);
   const getNextFirNumber = useFirStore(s => s.getNextFirNumber);
+  const clearAll = useFirStore(s => s.clearAll);
 
   // Merge backend FIRs with local ones on mount
   useEffect(() => {
-    const fetchBackend = async () => {
-      try {
-        setLoadingFirs(true);
-        const r = await firService.list({ pageSize: 20 });
-        if (r.success && r.data?.length > 0) {
-          // Backend has real data — could sync here if needed
-        }
-      } catch { 
-        /* backend offline */ 
-      } finally {
-        setLoadingFirs(false);
-      }
-    };
-    fetchBackend();
+    // ONE-TIME FINAL WIPE AS REQUESTED BY USER
+    const hasCleared = localStorage.getItem('crimegpt_force_wipe_final');
+    if (!hasCleared) {
+      clearAll();
+      localStorage.setItem('crimegpt_force_wipe_final', 'true');
+    }
   }, []);
 
   // Cleanup media streams on unmount
@@ -121,6 +116,34 @@ export default function FIRAutomator() {
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
+
+  // Format ID if type changes
+  useEffect(() => {
+    if (!formData.complainant_id) return;
+    
+    if (formData.complainant_id_type === 'Aadhaar Card') {
+      const digits = formData.complainant_id.replace(/\D/g, '').slice(0, 12);
+      const groups = digits.match(/.{1,4}/g);
+      const formatted = groups ? groups.join(' ') : digits;
+      if (formatted !== formData.complainant_id) {
+        setFormData(prev => ({ ...prev, complainant_id: formatted }));
+      }
+    } else {
+      const limits = {
+        'PAN Card': 10,
+        'Voter ID': 10,
+        'Passport': 8,
+        'Driving Licence': 15
+      };
+      const limit = limits[formData.complainant_id_type];
+      if (limit) {
+        const formatted = formData.complainant_id.toUpperCase().slice(0, limit);
+        if (formatted !== formData.complainant_id) {
+          setFormData(prev => ({ ...prev, complainant_id: formatted }));
+        }
+      }
+    }
+  }, [formData.complainant_id_type]);
 
   const getSupportedMimeType = () => {
     if (typeof MediaRecorder === 'undefined') return '';
@@ -226,6 +249,7 @@ export default function FIRAutomator() {
           complainant_id: complainant.id_number || current.complainant_id,
           incident_location: firstLocation || current.incident_location,
         }));
+        toast.success('FIR DRAFT GENERATED SUCCESSFULLY');
       }
     } catch (err) { 
       console.error("AI Generation Failed", err); 
@@ -234,6 +258,7 @@ export default function FIRAutomator() {
                  || err.response?.data?.detail?.[0]?.msg 
                  || "AI Generation failed. Ensure the narrative is at least 20 characters long.";
       setGenerationError(errMsg);
+      toast.error('AI GENERATION FAILED');
     } finally { 
       setIsGenerating(false); 
     }
@@ -266,8 +291,10 @@ export default function FIRAutomator() {
         complainant_name: '', complainant_contact: '', complainant_address: '',
         complainant_id: '', complainant_id_type: '', incident_location: '', incident_time: ''
       });
+      toast.success(`FIR ${localFir.fir_number} SAVED TO VAULT`);
 
-      // Best-effort backend sync
+      /* 
+      // Best-effort backend sync — Disabled to prevent unintentional record creation
       firService.submit({
         fir_number: localFir.fir_number,
         incident_description: narrative,
@@ -277,6 +304,7 @@ export default function FIRAutomator() {
         sections: [],
         ai_narrative: narrative
       }).catch(() => {});
+      */
 
     } catch (err) {
       console.error('Failed to save FIR', err);
@@ -285,7 +313,29 @@ export default function FIRAutomator() {
     }
   };
 
-  const updateField = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+  const updateField = (field, value) => {
+    let finalValue = value;
+    if (field === 'complainant_id') {
+      const type = formData.complainant_id_type;
+      if (type === 'Aadhaar Card') {
+        const digits = value.replace(/\D/g, '').slice(0, 12);
+        const groups = digits.match(/.{1,4}/g);
+        finalValue = groups ? groups.join(' ') : digits;
+      } else {
+        const limits = {
+          'PAN Card': 10,
+          'Voter ID': 10,
+          'Passport': 8,
+          'Driving Licence': 15
+        };
+        const limit = limits[type];
+        if (limit) {
+          finalValue = value.toUpperCase().slice(0, limit);
+        }
+      }
+    }
+    setFormData(prev => ({ ...prev, [field]: finalValue }));
+  };
 
   return (
     <div className="px-6">
@@ -372,7 +422,57 @@ export default function FIRAutomator() {
             <option value="Driving Licence">Driving Licence</option>
           </select>
         </div>
-        <InputField label="ID Number" placeholder="ENTER ID NUMBER" value={formData.complainant_id} onChange={(v) => updateField('complainant_id', v)} />
+        <div className="flex flex-col gap-1">
+          <InputField 
+            label="ID Number" 
+            placeholder={
+              formData.complainant_id_type === 'Aadhaar Card' ? "0000 0000 0000" : 
+              formData.complainant_id_type === 'PAN Card' ? "ABCDE1234F" : 
+              formData.complainant_id_type === 'Voter ID' ? "XYZ1234567" :
+              formData.complainant_id_type === 'Passport' ? "Z1234567" :
+              formData.complainant_id_type === 'Driving Licence' ? "DL-1420110012345" :
+              "ENTER ID NUMBER"
+            } 
+            value={formData.complainant_id} 
+            onChange={(v) => updateField('complainant_id', v)} 
+            maxLength={
+              formData.complainant_id_type === 'Aadhaar Card' ? 14 : 
+              formData.complainant_id_type === 'PAN Card' ? 10 : 
+              formData.complainant_id_type === 'Voter ID' ? 10 :
+              formData.complainant_id_type === 'Passport' ? 8 :
+              formData.complainant_id_type === 'Driving Licence' ? 15 :
+              undefined
+            }
+          />
+          {formData.complainant_id && formData.complainant_id_type && (
+            <p className={`label-mono text-[8px] mt-1 ${
+              (() => {
+                const type = formData.complainant_id_type;
+                const val = formData.complainant_id;
+                if (type === 'Aadhaar Card') return val.replace(/\D/g, '').length === 12;
+                if (type === 'PAN Card') return val.length === 10;
+                if (type === 'Voter ID') return val.length === 10;
+                if (type === 'Passport') return val.length === 8;
+                if (type === 'Driving Licence') return val.length === 15;
+                return true;
+              })() ? 'text-green-500' : 'text-red-400'
+            }`}>
+              {(() => {
+                const type = formData.complainant_id_type;
+                const val = formData.complainant_id;
+                if (type === 'Aadhaar Card') {
+                  return val.replace(/\D/g, '').length === 12 ? '✓ Valid Aadhaar format' : `✗ Need ${12 - val.replace(/\D/g, '').length} more digits`;
+                }
+                const limits = { 'PAN Card': 10, 'Voter ID': 10, 'Passport': 8, 'Driving Licence': 15 };
+                const limit = limits[type];
+                if (limit) {
+                  return val.length === limit ? `✓ Valid ${type} format` : `✗ Need ${limit - val.length} more characters`;
+                }
+                return null;
+              })()}
+            </p>
+          )}
+        </div>
       </FormSection>
 
       <FormSection id="02" title="Logistics">
@@ -454,7 +554,7 @@ export default function FIRAutomator() {
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <p className="label-mono text-[9px] text-accent/70 mb-1">FIR Record</p>
-                  <h2 className="text-3xl font-bold tracking-tighter uppercase">{selectedFir.fir_number}</h2>
+                  <h2 className="text-3xl font-bold tracking-tighter uppercase">{selectedFir.fir_number || selectedFir.fir_no || 'UNKNOWN'}</h2>
                 </div>
                 <button onClick={() => setSelectedFir(null)} className="text-muted-foreground hover:text-foreground transition-colors">
                   <X size={20} />
@@ -472,7 +572,7 @@ export default function FIRAutomator() {
                   </div>
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Contact</p>
-                    <p className="text-sm font-medium">{selectedFir.complainant?.contact || '—'}</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.contact || selectedFir.complainant?.phone || '—'}</p>
                   </div>
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Address</p>
@@ -480,22 +580,39 @@ export default function FIRAutomator() {
                   </div>
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Identity Proof</p>
-                    <p className="text-sm font-medium">{selectedFir.complainant?.id_proof || '—'}</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number || '—'}</p>
                   </div>
                 </div>
                 <div>
                   <p className="label-mono text-[8px] text-muted-foreground mb-1">Location</p>
-                  <p className="text-sm font-medium">{selectedFir.incident_location || '—'}</p>
+                  <p className="text-sm font-medium">{selectedFir.incident_location || selectedFir.location || '—'}</p>
                 </div>
                 <div>
                   <p className="label-mono text-[8px] text-muted-foreground mb-1">Filed</p>
-                  <p className="text-sm font-medium">{new Date(selectedFir.created_at).toLocaleString()}</p>
+                  <p className="text-sm font-medium">{selectedFir.created_at ? new Date(selectedFir.created_at).toLocaleString() : '—'}</p>
                 </div>
                 <div>
                   <p className="label-mono text-[8px] text-muted-foreground mb-2">Incident Narrative</p>
-                  <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">{selectedFir.incident_description || selectedFir.ai_narrative || '—'}</p>
+                  <div className="bg-background/30 p-4 border border-border/40 rounded-sm">
+                    <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap italic">
+                      "{selectedFir?.incident_description || selectedFir?.ai_narrative || 'No statement recorded.'}"
+                    </p>
+                  </div>
                 </div>
               </div>
+              
+              {selectedFir?.sections?.length > 0 && (
+                <div className="mt-6">
+                  <p className="label-mono text-[8px] text-muted-foreground mb-2 uppercase">Applied Sections</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedFir.sections.map((s, i) => (
+                      <span key={i} className="label-mono text-[9px] bg-accent/5 border border-accent/20 text-accent px-2 py-1 uppercase">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="mt-8 flex justify-end">
                 <button
                   onClick={() => { deleteFir(selectedFir.id); setSelectedFir(null); }}
@@ -513,7 +630,23 @@ export default function FIRAutomator() {
       <section className="border-t border-border py-8">
         <div className="flex items-end justify-between mb-4">
           <h2 className="text-4xl font-bold tracking-tighter uppercase text-foreground/80">Your FIRs</h2>
-          <span className="label-mono text-[9px] text-muted-foreground/40">{localFirs.length} records</span>
+          <div className="flex items-center gap-6">
+            {localFirs.length > 0 && (
+              <button 
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to clear all local drafts?')) {
+                    localStorage.removeItem('crimegpt_local_firs');
+                    localStorage.setItem('crimegpt_fir_counter', '0');
+                    window.location.reload();
+                  }
+                }}
+                className="label-mono text-[9px] text-accent border-b border-accent/30 hover:border-accent transition-all uppercase"
+              >
+                Clear All Drafts
+              </button>
+            )}
+            <span className="label-mono text-[9px] text-muted-foreground/40">{localFirs.length} records</span>
+          </div>
         </div>
         <div className="space-y-0 border-t border-border">
           {localFirs.length === 0 ? (

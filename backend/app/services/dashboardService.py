@@ -8,7 +8,6 @@ Provides role-based dashboard views:
 """
 
 import logging
-import uuid
 from typing import Any
 
 from sqlalchemy import select, func
@@ -21,7 +20,7 @@ from app.models.case_link import CaseLink
 from app.models.officer import Officer
 from app.repositories.FIRRepository import FIRRepository
 from app.repositories.AuditLogRepository import AuditLogRepository
-from app.types.enums import FIRStatus, OfficerRole
+from app.types.enums import FIRStatus
 
 logger = logging.getLogger("crimegpt.dashboard")
 
