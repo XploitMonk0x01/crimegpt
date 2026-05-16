@@ -35,12 +35,16 @@ class FastEmbedEmbeddingFunction:
     """Custom embedding function using FastEmbed for ChromaDB embeddings."""
 
     def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
-        # Lazy import to avoid loading weights unless Chroma is actually reachable.
-        from fastembed import TextEmbedding
-
-        self._model = TextEmbedding(model_name=model_name)
+        try:
+            from fastembed import TextEmbedding
+            self._model = TextEmbedding(model_name=model_name)
+        except ImportError:
+            logger.warning("fastembed not installed; local embedding function disabled.")
+            self._model = None
 
     def __call__(self, input: list[str]) -> list[list[float]]:
+        if not self._model:
+            return [[0.0] * 384] * len(input)  # Return dummy embeddings if model missing
         # FastEmbed returns a generator of numpy arrays; Chroma expects plain floats.
         return [[float(value) for value in embedding] for embedding in self._model.embed(input)]
 

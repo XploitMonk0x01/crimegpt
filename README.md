@@ -36,24 +36,24 @@
 <img src="https://readme-typing-svg.herokuapp.com?font=Lexend+Giga&size=25&pause=1000&color=e63946&vCenter=true&width=435&height=25&lines=OVERVIEW" width="450"/>
 
 ---
-
-**CrimeGPT** is a full-stack AI platform built for Indian Law Enforcement Agencies to streamline crime documentation, legal research, and case management. It replaces manual FIR drafting and legal lookups with an intelligent, AI-assisted workflow.
-
-> Built at the **Kanad S.H.I.E.L.D. Hackathon 2026** — combining real-world law enforcement needs with cutting-edge AI.
-
-### What makes it different?
-
-| Traditional Process | CrimeGPT |
-|---|---|
-| Manual FIR writing (hours) | AI-drafted FIR in seconds |
-| Physical law books | Real-time BNS 2023 query via LexBot |
-| Paper-based case files | Centralized digital evidence vault |
-| No pattern recognition | AI-powered case linkage |
-
-<div align="right">
-  <br>
-  <a href="#-crimegpt-top"><kbd> <br> 🡅 <br> </kbd></a>
-</div>
+ 
+ **CrimeGPT** is a next-generation AI-powered platform engineered for modern Law Enforcement. It transforms the traditional, paper-heavy crime documentation process into a streamlined, digital-first workflow driven by Retrieval-Augmented Generation (RAG) and high-performance LLMs.
+ 
+ > **Current State:** The platform is optimized for the **BNS 2023** (Bharatiya Nyaya Sanhita) legal framework, providing real-time intelligence and automated drafting for Indian Police Officers.
+ 
+ ### 🚀 Core Value Proposition
+ 
+ | Feature | Traditional Method | CrimeGPT Advantage |
+ |---|---|---|
+ | **FIR Generation** | 2-3 hours manual drafting | **< 30 seconds** AI-structured drafts |
+ | **Legal Research** | Manual book lookups | **Instant** BNS 2023 RAG Intelligence |
+ | **Evidence** | Physical logbooks | **Immutable** digital chain-of-custody |
+ | **Intelligence** | Manual link detection | **AI-driven** MO pattern recognition |
+ 
+ <div align="right">
+   <br>
+   <a href="#-crimegpt-top"><kbd> <br> 🡅 <br> </kbd></a>
+ </div>
 
 ---
 
@@ -62,12 +62,24 @@
 
 ---
 
-### Prerequisites
+### 🚀 Automated Setup (Recommended)
 
-- **Node.js** `v18+` and **npm**
-- **Python** `3.11+` and **pip**
-- **Docker** & **Docker Compose**
-- **Groq API Key** (free at [console.groq.com](https://console.groq.com))
+The easiest way to get started is using the provided development script. This will start the infrastructure, install dependencies for both backend/frontend, and launch the servers.
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/XploitMonk0x01/crimegpt.git
+cd crimegpt
+
+# 2. Run the dev script
+./dev.sh
+```
+
+---
+
+### 🛠️ Manual Setup
+
+If you prefer to run steps manually:
 
 ### 1. Clone the Repository
 
@@ -91,13 +103,13 @@ pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your GROQ_API_KEY, DB credentials
+# Edit .env with your GROQ_API_KEY
 
 # Initialize database schema
 python init_db.py
 
 # Start API server
-uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+uvicorn app.server:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ### 4. Frontend Setup
@@ -110,6 +122,10 @@ npm run dev -- --host
 
 > [!TIP]
 > The app will be available at `http://localhost:5173` (local) or your network IP for cross-device access.
+
+### 💡 Troubleshooting
+* **Python 3.13 Errors**: If you face `asyncpg` build errors, ensure you are using the latest `requirements.txt` which includes `asyncpg>=0.30.0`.
+* **Resource Spikes**: We have removed `spacy` and `fastembed` to keep the installation lightweight and avoid high CPU/RAM usage during setup.
 
 ### Demo Credentials
 
@@ -208,9 +224,9 @@ crimegpt/
 |---|---|
 | Frontend | React 19, Vite 8, Tailwind CSS 4, Framer Motion |
 | State | Zustand + localStorage |
-| Backend | FastAPI, Python 3.11 |
+| Backend | FastAPI, Python 3.11+ (Supports 3.13) |
 | AI/LLM | Groq API (Llama 3.3 70B) |
-| RAG | ChromaDB + sentence-transformers |
+| RAG | ChromaDB (Lexical Fallback) |
 | Database | PostgreSQL (Docker) |
 | Cache | Redis (Docker) |
 | Auth | JWT + demo bypass mode |
