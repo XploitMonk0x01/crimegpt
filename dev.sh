@@ -51,7 +51,7 @@ cd ../frontend
 
 if [ ! -d "node_modules" ]; then
     echo -e "${GREEN}📥 Installing frontend dependencies (this may take a minute)...${NC}"
-    npm install
+    npm install --no-audit --no-fund
 fi
 
 # 5. Start Services
