@@ -59,10 +59,8 @@ class FIR(Base):
     ai_narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_sections_rationale: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
-    # Public API aliases used by service/schema layers. Keep database column names
-    # stable while exposing clearer domain names throughout the application.
+    # Public API aliases used by service/schema layers.
     fir_number = synonym("fir_no")
-    incident_description = synonym("incident_desc")
     incident_location = synonym("location")
     approved_by_id = synonym("approved_by")
 

@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.types.enums import FIRStatus
 
@@ -137,20 +137,25 @@ class FIRResponse(BaseModel):
     id: uuid.UUID
     fir_number: str | None
     status: FIRStatus
-    incident_description: str
+    incident_description: str | None = None
     incident_date: datetime | None
     incident_location: str | None
     complainant: dict | None
     accused: dict | None
-    sections: list[str]
+    sections: list[str] = Field(default_factory=list)
     ai_narrative: str | None
     ai_recommended_sections: list[str] | None
     officer_id: uuid.UUID
     approved_by_id: uuid.UUID | None
     supervisor_remarks: str | None
-    pdf_url: str | None
+    pdf_url: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("sections", mode="before")
+    @classmethod
+    def _coerce_sections(cls, v):
+        return [] if v is None else v
 
     model_config = {"from_attributes": True}
 
@@ -162,7 +167,12 @@ class FIRListItem(BaseModel):
     fir_number: str | None
     status: FIRStatus
     incident_location: str | None
-    sections: list[str]
+    sections: list[str] = Field(default_factory=list)
     created_at: datetime
+
+    @field_validator("sections", mode="before")
+    @classmethod
+    def _coerce_sections(cls, v):
+        return [] if v is None else v
 
     model_config = {"from_attributes": True}

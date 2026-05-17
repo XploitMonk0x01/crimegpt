@@ -7,7 +7,7 @@ An Act to consolidate and amend the provisions relating to offences and for
 matters connected therewith or incidental thereto.
 
 BE it enacted by Parliament in the Seventy-fourth Year of the Republic of India as follows:
-mattersconnectedtherewithorincidentalthereto.
+matters connected there with or incidental there to.
 BE it enacted by Parliament in the Seventy-fourth Year of the Republic of India as
 follows:–
 
@@ -67,9 +67,9 @@ used in a Court or not.
 (a)Awriting expressing the terms of a contract, which may be used as evidence
 of the contract, is a document.
 (b) Acheque upon a banker is a document.
-(c)Apower-of-attorney is a document.
-(d)Amaporplanwhichisintendedtobeusedorwhich maybeusedasevidence,
-(e) Awriting containing directions or instructions is a document.
+(c)A power-of-attorney is a document.
+(d)A map or plan which is intended to be used or which may be used as evidence,
+(e)A writing containing directions or instructions is a document.
 Explanation 2.—Whatever is expressed by means of letters, figures or marks as
 explained by mercantile or other usage, shall be deemed to be expressed by such
 letters, figures or marks within the meaning of this section, although the same may not
@@ -172,7 +172,7 @@ document relating to the pecuniary interests of the Government, or to prevent
 the infraction of any law for the protection of the pecuniary interests of the
 Government;
 (i) every officer whose duty it is, as such officer, to take, receive, keep or
-expendanyproperty, tomakeanysurveyorassessmentortolevyanyrateortax
+expend any property, to make any survey or assessment or to levy any rate or tax
 for any secular common purpose of any village, town or district, or to make,
 authenticate or keep any document for the ascertaining of the rights of the
 people of any village, town or district;
@@ -183,7 +183,7 @@ or part of an election;
 (i) in the service or pay ofthe Governmentorremuneratedbyfeesor
 commission for the performance of any public duty by the Government;
 (ii) in the service or pay of a local authority as defined in clause (31)
-of section 3 ofthe General Clauses Act,1897,acorporationestablishedby
+of section 3 ofthe General Clauses Act,1897,a corporation established by
 or under a Central or State Act or a Government company as defined in
 clause (45) of section 2 of the CompaniesAct, 2013.
 Explanation.—
@@ -195,13 +195,13 @@ a public servant;
 (c) “election” means an election for the purpose of selecting members of
 any legislative, municipal or other public authority, of whatever character, the
 method of selection to which is by, or under any law for the time being in force.
-AMunicipal Commissionerisapublicservant;
+A Municipal Commissioner is a public servant;
 (29) “reason to believe”.—A person is said to have “reason to believe” a thing,
 if he has sufficient cause to believe that thing but not otherwise;
 (30) “special law” means a law applicable to a particular subject;
 (31) “valuable security” means a document which is, or purports to be, a
 document whereby any legal right is created, extended, transferred, restricted,
-extinguished or released, or whereby any person acknowledgesthatheliesunderlegal
+extinguished or released, or whereby any person acknowledgestha the lies under legal
 liability, or has not a certain legal right.
 A writes his name on the back of a bill of exchange. As the effect of this
 endorsement is to transfer the right to the bill to any person who may become the
@@ -219,7 +219,7 @@ yet, if he knew that he was likely to cause death, he has caused death voluntari
 (35) “woman” meansafemale humanbeing of any age;
 (36) “wrongful gain” means gain by unlawful means of property to which the
 person gaining is not legally entitled;
-(37) “wrongfulloss”meansthelossbyunlawfulmeansofpropertyto whichthe
+(37) “wrongfulloss” means the loss by unlawful means of property to whichthe
 person losing it is legally entitled;
 (38) “gaining wrongfully” and “losing wrongfully”.—A person is said to gain
 wrongfully whensuch personretainswrongfully,aswellaswhensuch personacquires

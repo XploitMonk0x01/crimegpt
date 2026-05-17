@@ -5,7 +5,7 @@ import { evidenceService, firService } from '../services/api';
 
 export default function Vault() {
   const [firs, setFirs] = useState([]);
-  const [selectedFir, setSelectedFir] = useState('');
+  const [selectedFirId, setSelectedFirId] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -18,6 +18,11 @@ export default function Vault() {
   const [loadingVerify, setLoadingVerify] = useState(false);
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+
+  const isUuid = (value) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      String(value || '').trim()
+    );
 
   const filteredFirs = firs.filter(f => 
     (f.fir_number?.toLowerCase().includes(query.toLowerCase())) ||
@@ -32,17 +37,23 @@ export default function Vault() {
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file || !selectedFir) return;
+    if (!file || !isUuid(selectedFirId)) {
+      setError('Please select a valid FIR from the list');
+      return;
+    }
     setUploading(true); setError(''); setUploadResult(null);
     try {
-      const r = await evidenceService.upload(file, selectedFir, description);
+      const r = await evidenceService.upload(file, selectedFirId, description);
       if (r.success) { setUploadResult(r.data); setFile(null); setDescription(''); }
     } catch (err) { setError(err.response?.data?.detail || 'Upload failed'); }
     finally { setUploading(false); }
   };
 
   const handleCustody = async () => {
-    if (!evidenceIdInput.trim()) return;
+    if (!isUuid(evidenceIdInput)) {
+      setCustodyData({ error: 'Please enter a valid Evidence UUID' });
+      return;
+    }
     setLoadingCustody(true); setCustodyData(null);
     try { const r = await evidenceService.getCustody(evidenceIdInput.trim()); if (r.success) setCustodyData(r.data); }
     catch (err) { setCustodyData({ error: err.response?.data?.detail || 'Not found' }); }
@@ -50,7 +61,10 @@ export default function Vault() {
   };
 
   const handleVerify = async () => {
-    if (!evidenceIdInput.trim()) return;
+    if (!isUuid(evidenceIdInput)) {
+      setVerifyData({ error: 'Please enter a valid Evidence UUID' });
+      return;
+    }
     setLoadingVerify(true); setVerifyData(null);
     try { const r = await evidenceService.verifyIntegrity(evidenceIdInput.trim()); if (r.success) setVerifyData(r.data); }
     catch (err) { setVerifyData({ error: err.response?.data?.detail || 'Verification failed' }); }
@@ -84,7 +98,7 @@ export default function Vault() {
                   onBlur={() => setTimeout(() => setIsOpen(false), 200)}
                   onChange={e => {
                     setQuery(e.target.value);
-                    setSelectedFir(e.target.value); 
+                    setSelectedFirId('');
                     setIsOpen(true);
                   }} 
                   placeholder="Type FIR Number or UUID..." 
@@ -93,7 +107,7 @@ export default function Vault() {
                 {query && (
                   <button 
                     type="button"
-                    onClick={() => { setQuery(''); setSelectedFir(''); setIsOpen(false); }}
+                    onClick={() => { setQuery(''); setSelectedFirId(''); setIsOpen(false); }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 hover:text-accent transition-colors"
                   >
                     <X size={14} />
@@ -113,7 +127,7 @@ export default function Vault() {
                           type="button"
                           onClick={() => {
                             setQuery(f.fir_number || f.id.slice(0, 8));
-                            setSelectedFir(f.id);
+                            setSelectedFirId(f.id);
                             setIsOpen(false);
                           }}
                           className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b border-border/50 last:border-none flex justify-between items-center group"
@@ -135,9 +149,9 @@ export default function Vault() {
                   )}
                 </AnimatePresence>
               </div>
-              {selectedFir && selectedFir !== query && (
+              {selectedFirId && (
                 <p className="label-mono text-[7px] text-accent mt-1">
-                  LINKED ID: {selectedFir}
+                  LINKED ID: {selectedFirId}
                 </p>
               )}
             </div>
@@ -155,7 +169,7 @@ export default function Vault() {
                 <div className="flex items-center gap-2"><CheckCircle size={14} className="text-green-500" /><p className="label-mono text-[10px] text-green-500">Uploaded</p></div>
               </motion.div>
             )}
-            <button type="submit" disabled={uploading || !file || !selectedFir} className="flex items-center gap-3 px-8 py-4 bg-accent text-background font-bold text-lg uppercase tracking-tighter hover:bg-foreground transition-all disabled:opacity-50">
+            <button type="submit" disabled={uploading || !file || !isUuid(selectedFirId)} className="flex items-center gap-3 px-8 py-4 bg-accent text-background font-bold text-lg uppercase tracking-tighter hover:bg-foreground transition-all disabled:opacity-50">
               {uploading ? <><span>Uploading...</span><Loader2 size={20} className="animate-spin" /></> : <><span>Upload Evidence</span><Upload size={20} /></>}
             </button>
           </form>

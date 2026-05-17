@@ -83,7 +83,7 @@ class EvidenceService:
             "officer_badge": officer.badge_no,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "ip_address": ip_address,
-            "description": description,
+            "notes": description,
         }
 
         # Create DB record
@@ -92,17 +92,17 @@ class EvidenceService:
             fir_id=fir_id,
             officer_id=officer.id,
             filename=file.filename or "unknown",
-            file_path=str(file_path),
-            file_size=len(content),
-            mime_type=file.content_type or "application/octet-stream",
+            file_type=file.content_type or "application/octet-stream",
+            file_size_bytes=len(content),
             sha256_hash=file_hash,
-            description=description,
-            chain_of_custody=[custody_entry],
-            metadata_extracted={
+            metadata_json={
                 "original_filename": file.filename,
                 "content_type": file.content_type,
                 "size_bytes": len(content),
+                "description": description,
             },
+            chain_of_custody=[custody_entry],
+            stored_path=str(file_path),
         )
 
         created = await self._repo.create(evidence)
@@ -126,7 +126,7 @@ class EvidenceService:
             "file_size": len(content),
             "fir_id": str(fir_id),
             "uploaded_by": officer.badge_no,
-            "created_at": created.created_at.isoformat() if created.created_at else None,
+            "created_at": created.uploaded_at.isoformat() if created.uploaded_at else None,
         }
 
     async def get_custody_chain(
@@ -165,7 +165,7 @@ class EvidenceService:
         if not evidence:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
 
-        file_path = Path(evidence.file_path)
+        file_path = Path(evidence.stored_path)
         if not file_path.exists():
             return {
                 "id": str(evidence.id),
