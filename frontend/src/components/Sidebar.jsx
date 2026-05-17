@@ -8,7 +8,9 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Shield
+  Shield,
+  Stamp,
+  BookOpen
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, onSettingsClick }) {
@@ -22,6 +24,8 @@ export default function Sidebar({ activeTab, setActiveTab, onSettingsClick }) {
     { id: 'lexbot', label: 'LexBot', icon: MessageSquare },
     { id: 'vault', label: 'Vault', icon: Database },
     { id: 'linkage', label: 'Linkage', icon: Link2 },
+    { id: 'documents', label: 'Documents', icon: Stamp },
+    { id: 'diary', label: 'Diary', icon: BookOpen },
   ];
 
   const startResizing = useCallback(() => {

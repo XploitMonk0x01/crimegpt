@@ -170,8 +170,14 @@ export const nlpService = {
     });
     return response.data;
   },
-  translate: async () => {
-    const response = await api.post('/nlp/translate');
+  translate: async (text, sourceLang = 'en', targetLang = 'hi') => {
+    const formData = new FormData();
+    formData.append('text', text);
+    formData.append('source_lang', sourceLang);
+    formData.append('target_lang', targetLang);
+    const response = await api.post('/nlp/translate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   },
   getLanguages: async () => {
@@ -180,4 +186,58 @@ export const nlpService = {
   },
 };
 
+// ─────────────── Document Generation Service ───────────────
+export const documentService = {
+  getTypes: async () => {
+    const response = await api.get('/documents/types');
+    return response.data;
+  },
+  generate: async (firId, documentType, { language = 'en', additionalContext } = {}) => {
+    const response = await api.post('/documents/generate', {
+      fir_id: firId,
+      document_type: documentType,
+      language,
+      additional_context: additionalContext,
+    });
+    return response.data;
+  },
+  exportPdf: async (data) => {
+    const response = await api.post('/documents/export-pdf', data, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+};
+
+// ─────────────── Case Diary Service ───────────────
+export const caseDiaryService = {
+  getEntryTypes: async () => {
+    const response = await api.get('/diary/types');
+    return response.data;
+  },
+  addEntry: async (firId, data) => {
+    const response = await api.post(`/diary/${firId}/entry`, data);
+    return response.data;
+  },
+  getDiary: async (firId) => {
+    const response = await api.get(`/diary/${firId}`);
+    return response.data;
+  },
+  deleteEntry: async (entryId) => {
+    const response = await api.delete(`/diary/entry/${entryId}`);
+    return response.data;
+  },
+};
+
+// ─────────────── Search Service ───────────────
+export const searchService = {
+  searchFirs: async (query, { page = 1, pageSize = 20 } = {}) => {
+    const response = await api.get('/search', {
+      params: { q: query, page, page_size: pageSize },
+    });
+    return response.data;
+  },
+};
+
 export default api;
+

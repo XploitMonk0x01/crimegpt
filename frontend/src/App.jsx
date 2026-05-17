@@ -5,6 +5,8 @@ import FIRAutomator from './components/FIRAutomator';
 import Dashboard from './components/Dashboard';
 import Vault from './components/Vault';
 import CaseLinkage from './components/CaseLinkage';
+import DocumentGenerator from './components/DocumentGenerator';
+import CaseDiary from './components/CaseDiary';
 import Login from './components/Login';
 import UserSettings from './components/UserSettings';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -110,6 +112,8 @@ export default function App() {
             {activeTab === 'lexbot' && <LexBot />}
             {activeTab === 'vault' && <Vault />}
             {activeTab === 'linkage' && <CaseLinkage />}
+            {activeTab === 'documents' && <DocumentGenerator />}
+            {activeTab === 'diary' && <CaseDiary />}
           </motion.div>
         </AnimatePresence>
       </main>

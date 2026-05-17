@@ -8,6 +8,8 @@ from app.models.officer import Officer
 from app.models.fir import FIR
 from app.models.evidence import Evidence
 from app.models.case_link import CaseLink
+from app.models.audit_log import AuditLog
+from app.models.case_diary import CaseDiaryEntry
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("crimegpt.init_db")

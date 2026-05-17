@@ -156,6 +156,9 @@ def _register_routers(app: FastAPI, settings) -> None:
     from app.routes.caseRoutes import router as case_router
     from app.routes.nlpRoutes import router as nlp_router
     from app.routes.dashboardRoutes import router as dashboard_router
+    from app.routes.documentRoutes import router as document_router
+    from app.routes.caseDiaryRoutes import router as diary_router
+    from app.routes.searchRoutes import router as search_router
 
     app.include_router(auth_router, prefix=f"{prefix}/auth", tags=["Authentication"])
     app.include_router(fir_router, prefix=f"{prefix}/fir", tags=["FIR Management"])
@@ -164,8 +167,11 @@ def _register_routers(app: FastAPI, settings) -> None:
     app.include_router(case_router, prefix=f"{prefix}/cases", tags=["Case Linkage"])
     app.include_router(nlp_router, prefix=f"{prefix}/nlp", tags=["NLP & Translation"])
     app.include_router(dashboard_router, prefix=f"{prefix}/dashboard", tags=["Dashboard"])
+    app.include_router(document_router, prefix=f"{prefix}/documents", tags=["Document Generation"])
+    app.include_router(diary_router, prefix=f"{prefix}/diary", tags=["Case Diary"])
+    app.include_router(search_router, prefix=f"{prefix}/search", tags=["Search"])
 
-    logger.info(f"   Registered 7 API routers under {prefix}")
+    logger.info(f"   Registered 10 API routers under {prefix}")
 
 
 # Module-level app instance for uvicorn / ASGI servers

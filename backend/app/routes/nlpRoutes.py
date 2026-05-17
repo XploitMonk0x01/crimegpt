@@ -61,8 +61,24 @@ async def transcribe(
 
 
 @router.post("/translate", summary="Translate Text")
-async def translate():
-    return {"message": "Translation — coming in Phase 11"}
+async def translate(
+    text: str = Form(..., min_length=1, description="Text to translate"),
+    source_lang: str = Form(default="en", description="Source language code (en/hi/gu)"),
+    target_lang: str = Form(default="hi", description="Target language code (en/hi/gu)"),
+):
+    """Translate text between English, Hindi, and Gujarati."""
+    from app.services.translationService import TranslationService
+
+    supported = {"en", "hi", "gu"}
+    if source_lang not in supported or target_lang not in supported:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported language. Supported: {supported}",
+        )
+
+    service = TranslationService()
+    result = await service.translate(text, source_lang, target_lang)
+    return {"success": True, "data": result}
 
 
 @router.get("/languages", summary="Supported Languages")

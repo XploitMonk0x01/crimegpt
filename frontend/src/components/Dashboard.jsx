@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, AlertTriangle, X } from 'lucide-react';
-import { dashboardService } from '../services/api';
+import { FileText, AlertTriangle, X, Search, Loader2 } from 'lucide-react';
+import { dashboardService, searchService } from '../services/api';
 import useFirStore from '../store/firStore';
 
 const StatCard = ({ label, value, detail, loading }) => (
@@ -56,6 +56,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedFir, setSelectedFir] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
   
   const localFirs = useFirStore(s => s.localFirs);
   const localDraftCount = localFirs.filter(f => f.status === 'draft').length;
@@ -78,7 +82,21 @@ export default function Dashboard() {
 
   useEffect(() => {
     queueMicrotask(fetchDashboard);
+    dashboardService.getAuditLogs({ limit: 10 }).then(r => {
+      if (r.success) setAuditLogs(r.data || []);
+    }).catch(() => {});
   }, []);
+
+  const handleSearch = async (e) => {
+    e?.preventDefault();
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    try {
+      const r = await searchService.searchFirs(searchQuery);
+      if (r.success) setSearchResults(r);
+    } catch { setSearchResults({ data: [], total: 0 }); }
+    finally { setSearching(false); }
+  };
 
   const stats = data?.fir_stats || {};
   const recentFirs = data?.recent_firs || [];
@@ -99,6 +117,41 @@ export default function Dashboard() {
         >
           Sync System
         </button>
+      </section>
+
+      {/* Search Bar */}
+      <section className="px-6 py-4 border-b border-border">
+        <form onSubmit={handleSearch} className="flex gap-3 items-center">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
+            <input
+              type="text" value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search FIRs by keyword, case number, or location..."
+              className="w-full bg-muted/50 border-none pl-9 pr-4 py-3 text-sm tracking-tight focus:outline-none focus:ring-1 focus:ring-accent/40 placeholder:text-muted-foreground/20 text-foreground/80"
+            />
+          </div>
+          <button type="submit" disabled={searching || !searchQuery.trim()}
+            className="px-6 py-3 bg-accent text-background font-bold text-sm uppercase tracking-tighter hover:bg-foreground transition-all disabled:opacity-50 flex items-center gap-2">
+            {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Search
+          </button>
+        </form>
+        {searchResults && (
+          <div className="mt-4 border border-border p-4">
+            <div className="flex justify-between items-center mb-3">
+              <p className="label-mono text-[10px] text-accent">{searchResults.total} results for "{searchResults.query}"</p>
+              <button onClick={() => { setSearchResults(null); setSearchQuery(''); }} className="text-muted-foreground hover:text-accent"><X size={14} /></button>
+            </div>
+            {searchResults.data?.length > 0 ? searchResults.data.map((f, i) => (
+              <div key={f.id} onClick={() => setSelectedFir(f)}
+                className="flex items-center justify-between py-3 border-b border-border/50 last:border-0 hover:bg-muted/30 px-2 cursor-pointer group">
+                <div><p className="text-sm font-bold uppercase tracking-tight group-hover:text-accent">{f.fir_number}</p>
+                  <p className="label-mono text-[8px] text-muted-foreground truncate max-w-md">{f.incident_description}</p></div>
+                <StatusBadge status={f.status} />
+              </div>
+            )) : <p className="label-mono text-[9px] text-muted-foreground/40 py-4 text-center">No matching FIRs found</p>}
+          </div>
+        )}
       </section>
 
       {/* Error Banner */}

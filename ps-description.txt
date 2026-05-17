@@ -1,0 +1,83 @@
+Problem Description
+Background
+
+Law enforcement agencies spend a significant amount of time preparing repetitive and detail-heavy documentation throughout the lifecycle of a criminal case. From the moment a victim applies at the police station to the eventual arrest and remand of the accused, various documents such as charge sheets, remand requests, seizure receipts, medical letters, court custody letters, and face identification forms must be created. Much of the content in these documents overlaps, yet officers must manually re-enter and verify the same information across different forms, increasing the risk of errors, omissions, and inefficiencies. Additionally, officers often struggle to immediately determine applicable legal provisions or landmark judgments based on the narrative of the incident, slowing investigation and prosecution.
+
+---
+Problem Statement
+Develop a smart AI-driven platform, CrimeGPT, that automates and accelerates the creation of crime-related documentation by eliminating duplication of information and intelligently extracting and mapping legal sections and relevant case laws based on incident narratives. The platform should assist officers from the first victim report to arrest, helping generate all required documents dynamically and maintain a case diary over time.
+
+---
+Key Objectives
+Reduce redundant data entry across legal documents.
+Dynamically generate all required documents for a criminal case using a shared pool of case data.
+Maintain a digital Case Diary from FIR to arrest.
+Recommend relevant legal sections and case laws/judgments based on crime descriptions.
+Ensure document format compliance with Indian criminal procedure standards (BNSS/BNS/BSA).
+
+----
+Functional Requirements
+Unified Case Data Pool:
+Single entry of names, addresses, sections, items seized, statements, etc., used across documents.
+Editable and traceable entries.
+Document Generation Engine:
+Automatically generate the following documents:
+Purvani Chargesheet
+Medical Treatment Letter
+Remand Request Letter (Police Custody)
+Seizure Receipt
+Court Custody Letter
+Accused Panchanama
+Accused Face Identification Form
+Case Diary Automation:
+Maintain a timeline-based case diary from initial complaint to arrest.
+Log investigative steps, witness interaction, evidence seizure, etc.
+Legal Section Intelligence:
+NLP-based module to analyse the case summary and suggest:
+Relevant sections under BNS, BNSS, BSA
+Applicable landmark judgments
+Cross-referenced IPC/CrPC/Evidence Act provisions where needed.
+Multilingual Interface:
+Input/output support in Gujarati, Hindi, and English.
+Search & Audit:
+Officers can retrieve old entries/documents using keywords or case
+numbers.
+Version history and audit trail for all document edits.
+---
+Evaluation Criteria
+Accuracy of Document Generation: The solution will be evaluated based on how accurately and consistently it generates various crime-related documents using shared input data, minimizing duplication and errors.
+Intelligence in Legal Section Mapping: The platform should effectively analyse incident descriptions and suggest appropriate legal sections under BNS, BNSS, and BSA, along with relevant landmark case laws or judgments.
+User Experience and Interface Design: The usability of the interface, especially for non-technical law enforcement officers, will be assessed, including clarity of workflow, ease of navigation, and multilingual support.
+Integration and Management of Case Diary: The system’s ability to maintain a structured and chronological case diary that records all investigative activities from the first report to the arrest will be considered.
+Language Support and Localization: The extent and quality of multilingual input/output support—especially in Gujarati, Hindi, and English—will be reviewed for real-world deployment readiness.
+Completeness and Quality of Deliverables: The overall completeness of the working solution, including documentation, code structure, dataset use, and demo materials, will be evaluated.
+Innovation and Additional Features: Extra credit will be given for innovative or additional features such as offline mode, integration with other systems like BharatPol or CCTNS, face recognition support, or evidence tracking.
+
+---
+Suggested Tools/Technologies
+Frontend: React.js / Angular
+Backend: Node.js / Django / Flask
+Database: PostgreSQL / MongoDB
+NLP & AI: OpenAI GPT, spaCy, BERT (for legal text classification)
+OCR (for scanned documents): Tesseract or Google Vision
+Localization: Google Translate API / Indic NLP Library
+Document Templates: Docx templating (e.g., docxtpl, pdfplumber)
+Legal Dataset:  Indian Kanoon, BNS/BNSS/BSA datasets, SCC Online (mocked or public)
+
+---
+Bonus Points
+Integration with Meta/Facebook/Instagram/WhatsApp LERS compliant request templates.
+Offline-first support for low-network police stations.
+Role-based access (IO, SHO, Legal Advisor).
+Evidence image upload and tagging.
+Linkage to CCTNS or BharatPol mock API.
+
+---
+Deliverables
+A working prototype of CrimeGPT with at least 4 autogenerated documents.
+A demo showing:
+Case creation from FIR to arrest.
+Real-time generation of at least two documents.
+Legal section and judgment suggestions.
+Documentation (README, user guide, and code).
+Dataset used (including anonymized legal texts, FIR samples).

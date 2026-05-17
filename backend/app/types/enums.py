@@ -41,7 +41,16 @@ class AuditAction(str, Enum):
     FIR_SUBMIT = "FIR_SUBMIT"
     FIR_APPROVE = "FIR_APPROVE"
     FIR_REJECT = "FIR_REJECT"
+    FIR_SEARCH = "FIR_SEARCH"
     FIR_EXPORT_PDF = "FIR_EXPORT_PDF"
+
+    # Documents
+    DOCUMENT_GENERATE = "DOCUMENT_GENERATE"
+    DOCUMENT_EXPORT_PDF = "DOCUMENT_EXPORT_PDF"
+
+    # Case Diary
+    DIARY_ENTRY_ADD = "DIARY_ENTRY_ADD"
+    DIARY_ENTRY_DELETE = "DIARY_ENTRY_DELETE"
 
     # Evidence
     EVIDENCE_UPLOAD = "EVIDENCE_UPLOAD"
@@ -54,6 +63,9 @@ class AuditAction(str, Enum):
     # Legal
     LEGAL_QUERY = "LEGAL_QUERY"
 
+    # Translation
+    TRANSLATE = "TRANSLATE"
+
 
 class ResourceType(str, Enum):
     """Resource types for audit log entries."""
@@ -63,6 +75,8 @@ class ResourceType(str, Enum):
     EVIDENCE = "evidence"
     CASE_LINK = "case_link"
     LEGAL_QUERY = "legal_query"
+    DOCUMENT = "document"
+    CASE_DIARY = "case_diary"
 
 
 class SupportedLanguage(str, Enum):
@@ -71,3 +85,31 @@ class SupportedLanguage(str, Enum):
     ENGLISH = "en"
     HINDI = "hi"
     GUJARATI = "gu"
+
+
+class DocumentType(str, Enum):
+    """Types of legal documents that can be auto-generated."""
+
+    CHARGESHEET = "chargesheet"
+    MEDICAL_LETTER = "medical_letter"
+    REMAND_REQUEST = "remand_request"
+    SEIZURE_RECEIPT = "seizure_receipt"
+    COURT_CUSTODY_LETTER = "court_custody_letter"
+    ACCUSED_PANCHANAMA = "accused_panchanama"
+    FACE_ID_FORM = "face_id_form"
+
+
+class CaseDiaryEntryType(str, Enum):
+    """Types of entries in the case diary timeline."""
+
+    COMPLAINT_RECEIVED = "complaint_received"
+    FIR_REGISTERED = "fir_registered"
+    INVESTIGATION_STARTED = "investigation_started"
+    WITNESS_EXAMINED = "witness_examined"
+    EVIDENCE_SEIZED = "evidence_seized"
+    SPOT_VISIT = "spot_visit"
+    ARREST_MADE = "arrest_made"
+    REMAND_REQUESTED = "remand_requested"
+    CHARGESHEET_FILED = "chargesheet_filed"
+    COURT_HEARING = "court_hearing"
+    OTHER = "other"
