@@ -218,6 +218,8 @@ crimegpt/
 │   ├── init_db.py             # Database initializer
 │   └── .env                   # Environment config
 │
+├── install.sh                 # 🚀 Automated setup & dependency installer
+├── start.sh                   # 🟢 Application runtime launcher
 └── docker-compose.yml         # PostgreSQL + Redis
 ```
 
