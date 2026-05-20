@@ -62,17 +62,20 @@
 
 ---
 
-### 🚀 Automated Setup (Recommended)
+### 🚀 Quick Start (Automated Setup)
 
-The easiest way to get started is using the provided development script. This will start the infrastructure, install dependencies for both backend/frontend, and launch the servers.
+The easiest way to get started is using the custom utility scripts. This handles all dependencies, environment setups, database schemas, and service coordination.
 
+#### 1. Setup & Installation
+Run the installer to configure your environment, download dependencies, and spin up databases:
 ```bash
-# 1. Clone the repository
-git clone https://github.com/XploitMonk0x01/crimegpt.git
-cd crimegpt
+./install.sh
+```
 
-# 2. Run the dev script
-./dev.sh
+#### 2. Run & Start
+Launch all full-stack backend, frontend, and database services simultaneously:
+```bash
+./start.sh
 ```
 
 ---
