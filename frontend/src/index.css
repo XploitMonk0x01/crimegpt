@@ -57,6 +57,21 @@
   color: var(--color-foreground);
 }
 
+.light {
+  --color-background: #F5F5F5;
+  --color-foreground: #1A1A1A;
+  --color-muted: #E5E5E5;
+  --color-muted-foreground: #737373;
+  --color-accent: #E13D00;
+  --color-accent-foreground: #FFFFFF;
+  --color-border: #D4D4D4;
+  --color-input: #E5E5E5;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #1A1A1A;
+  --color-ring: #E13D00;
+  color-scheme: light;
+}
+
 body {
   @apply font-sans antialiased bg-background text-foreground;
   margin: 0;

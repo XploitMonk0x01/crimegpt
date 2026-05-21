@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, Shield, Bell, Lock, Moon, Sun, LogOut, ChevronRight } from 'lucide-react';
 import useAuthStore from '../store/authStore';
@@ -25,7 +25,20 @@ const Toggle = ({ value, onChange }) => (
 export default function UserSettings({ isOpen, onClose }) {
   const { user, logout } = useAuthStore();
   const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
+  
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('crimegpt_dark_mode');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('crimegpt_dark_mode', darkMode);
+    if (darkMode) {
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+    }
+  }, [darkMode]);
   const [autoSave, setAutoSave] = useState(true);
   const [name, setName] = useState(user?.name || '');
   const [badge, setBadge] = useState(user?.badge_number || 'DM-0001');
