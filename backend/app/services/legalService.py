@@ -12,8 +12,11 @@ import logging
 import re
 from typing import Any
 
+from app.config import get_settings
 from app.services.llmService import LLMService
+from app.services.ragSafety import analyze_text, redact_pii, strip_prompt_injection
 from app.services.ragService import RAGService
+from app.services.ragCache import RAGCache
 
 logger = logging.getLogger("crimegpt.legal")
 
@@ -34,29 +37,65 @@ class LegalService:
     """Legal intelligence — RAG-powered Q&A over Indian criminal law."""
 
     def __init__(self):
+        self._settings = get_settings()
         self._llm = LLMService()
         self._rag = RAGService()
 
     async def ask_question(self, question: str, *, language: str = "en") -> dict[str, Any]:
-        """Answer a legal question using RAG + LLM."""
+        """Answer a legal question using RAG + LLM, with Redis answer cache."""
         logger.info("Legal query: %s...", question[:100])
 
         where = self._infer_act_filter(question)
+        act_filter = (where or {}).get("act", "")
+
+        # ── Layer 1: Full answer cache check ──
+        cache = RAGCache()
+        cached_answer = await cache.get_answer(question, act_filter, language)
+        if cached_answer is not None:
+            cached_answer["cached"] = True
+            return cached_answer
+
         search_query = await self._expand_query(question)
 
-        # Use a lower threshold than pure embeddings so the local lexical fallback
-        # remains useful when ChromaDB is not running.
-        chunks = await self._rag.query(search_query, n_results=6, where=where, min_similarity=0.18)
+        # Over-fetch with a low threshold — hybrid reranker in RAGService will
+        # re-score and apply the final min_similarity cutoff (0.12) after BM25 fusion.
+        chunks = await self._rag.query(
+            search_query, n_results=8, where=where, min_similarity=0.12, rerank=True
+        )
 
         context_parts = []
         sources = []
+        safety_summary = {
+            "prompt_injection": 0,
+            "prompt_injection_stripped": 0,
+            "pii_matches": {"email": 0, "phone": 0, "aadhaar": 0},
+        }
+        source_types: dict[str, int] = {}
         for i, chunk in enumerate(chunks):
             metadata = chunk.get("metadata", {})
             section = metadata.get("section", "unknown")
-            context_parts.append(f"[Source {i + 1} | Section: {section}] {chunk['text']}")
+
+            raw_text = chunk["text"]
+            signals = analyze_text(raw_text)
+            safety_summary["prompt_injection"] += int(signals.prompt_injection)
+            for key in safety_summary["pii_matches"]:
+                safety_summary["pii_matches"][key] += signals.pii_matches.get(key, 0)
+
+            sanitized_text = raw_text
+            stripped_lines = 0
+            if self._settings.rag.redact_pii:
+                sanitized_text = redact_pii(sanitized_text)
+            if self._settings.rag.strip_prompt_injection:
+                sanitized_text, stripped_lines = strip_prompt_injection(sanitized_text)
+                safety_summary["prompt_injection_stripped"] += stripped_lines
+
+            context_parts.append(f"[Source {i + 1} | Section: {section}] {sanitized_text}")
+            source_type = metadata.get("source_type", "corpus")
+            source_types[source_type] = source_types.get(source_type, 0) + 1
             sources.append({
-                "text": chunk["text"][:200] + "..." if len(chunk["text"]) > 200 else chunk["text"],
+                "text": sanitized_text[:200] + "..." if len(sanitized_text) > 200 else sanitized_text,
                 "source": metadata.get("source", "unknown"),
+                "source_type": source_type,
                 "act": metadata.get("act", "unknown"),
                 "section": section,
                 "similarity": chunk.get("similarity", 0),
@@ -79,13 +118,24 @@ class LegalService:
             max_tokens=1500,
         )
 
-        return {
+        result = {
             "question": question,
             "answer": answer,
             "sources": sources,
             "language": language,
             "chunks_retrieved": len(chunks),
+            "retrieval": {
+                "query": search_query,
+                "act_filter": where,
+                "source_types": source_types,
+            },
+            "safety": safety_summary,
+            "cached": False,
         }
+
+        # ── Store in answer cache ──
+        await cache.set_answer(question, act_filter, language, result)
+        return result
 
     async def search_sections(
         self,
@@ -96,7 +146,9 @@ class LegalService:
     ) -> list[dict[str, Any]]:
         """Search legal sections by keyword, optionally filtered by act."""
         where = {"act": act} if act else None
-        chunks = await self._rag.query(keyword, n_results=n_results, where=where, min_similarity=0.12)
+        chunks = await self._rag.query(
+            keyword, n_results=n_results, where=where, min_similarity=0.10, rerank=True
+        )
 
         return [
             {
@@ -121,7 +173,8 @@ class LegalService:
             incident_description,
             n_results=8,
             where={"act": "bns_2023"},
-            min_similarity=0.12,
+            min_similarity=0.10,
+            rerank=True,
         )
         context = "\n\n".join(
             f"[Candidate {i + 1} | Section: {chunk.get('metadata', {}).get('section', 'unknown')}] {chunk['text']}"

@@ -16,14 +16,25 @@ Usage:
     chunks = await rag.query("What are the penalties for theft under BNS 2023?")
 """
 
+import asyncio
+import hashlib
 import logging
 import math
 import re
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
+
+import httpx
 
 from app.config import get_settings
+from app.schemas.rag_schema import RAGUrlIngestRequest, RAGUrlIngestResult
+from app.services.ragSafety import analyze_text, redact_pii, strip_prompt_injection
+from app.utils.text_extraction import extract_text_from_html, normalize_whitespace
+from app.utils.hybrid_retrieval import hybrid_rerank, sentence_boundary_chunk
+from app.services.ragCache import RAGCache
 
 logger = logging.getLogger("crimegpt.rag")
 
@@ -100,6 +111,7 @@ class RAGService:
 
     def __init__(self):
         self._settings = get_settings()
+        self._rag_settings = self._settings.rag
         self._client = None
         self._collection = None
         self._embedding_fn = None
@@ -144,26 +156,51 @@ class RAGService:
         n_results: int = 5,
         where: dict | None = None,
         min_similarity: float = 0.5,
+        rerank: bool = True,
+        use_cache: bool = True,
     ) -> list[dict[str, Any]]:
         """
         Query the legal corpus and return top matching chunks.
 
-        ChromaDB is preferred. If ChromaDB or embeddings are unavailable, this method
-        still returns useful results by searching the checked-in legal corpus locally.
+        Pipeline:
+        0. Check Redis retrieval cache (key = SHA-256 of query + act_filter)
+        1. Retrieve n_results * 3 candidates (over-fetch for reranking)
+        2. Apply hybrid BM25 + semantic reranking (Reciprocal Rank Fusion)
+        3. Apply relevance threshold cutoff
+        4. Store results in Redis cache, return top n_results
+
+        ChromaDB is preferred. Falls back to local lexical search automatically.
         """
+        act_filter = (where or {}).get("act", "")
+
+        # ── Layer 0: Cache check ──
+        if use_cache:
+            cache = RAGCache()
+            cached = await cache.get_chunks(query_text, act_filter)
+            if cached is not None:
+                return cached[:n_results]
+
+        # Over-fetch candidates for reranking
+        fetch_n = n_results * 3 if rerank else n_results
+
         collection = self._get_client()
         if collection is None:
-            return self._query_local_corpus(
+            raw = self._query_local_corpus(
                 query_text,
-                n_results=n_results,
+                n_results=fetch_n,
                 where=where,
-                min_similarity=min_similarity,
+                min_similarity=min_similarity * 0.5,  # lower threshold before rerank
             )
+            result = self._apply_rerank(raw, query_text, n_results=n_results,
+                                         min_similarity=min_similarity, rerank=rerank)
+            if use_cache and result:
+                await RAGCache().set_chunks(query_text, act_filter, result)
+            return result
 
         try:
             kwargs: dict[str, Any] = {
                 "query_texts": [query_text],
-                "n_results": n_results,
+                "n_results": max(fetch_n, 1),
             }
             if where:
                 kwargs["where"] = where
@@ -177,27 +214,66 @@ class RAGService:
                 dists = results["distances"][0] if results.get("distances") else [0.0] * len(docs)
 
                 for doc, meta, dist in zip(docs, metas, dists):
-                    # Chroma returns cosine distance (0 identical, 1 orthogonal).
+                    # Chroma returns cosine distance (0=identical, 1=orthogonal)
                     similarity = round(max(0.0, 1.0 - float(dist)), 4)
-                    if similarity >= min_similarity:
-                        chunks.append({"text": doc, "metadata": meta or {}, "similarity": similarity})
+                    chunks.append({"text": doc, "metadata": meta or {}, "similarity": similarity})
 
-            logger.info(
-                "RAG query returned %s Chroma chunks (threshold %s) for: %s...",
-                len(chunks),
-                min_similarity,
-                query_text[:80],
-            )
-            return chunks
+            result = self._apply_rerank(chunks, query_text, n_results=n_results,
+                                         min_similarity=min_similarity, rerank=rerank)
+            if use_cache and result:
+                await RAGCache().set_chunks(query_text, act_filter, result)
+            return result
 
         except Exception as e:
             logger.error("RAG query error; using local corpus fallback: %s", e)
-            return self._query_local_corpus(
+            raw = self._query_local_corpus(
                 query_text,
-                n_results=n_results,
+                n_results=fetch_n,
                 where=where,
-                min_similarity=min_similarity,
+                min_similarity=min_similarity * 0.5,
             )
+            result = self._apply_rerank(raw, query_text, n_results=n_results,
+                                         min_similarity=min_similarity, rerank=rerank)
+            if use_cache and result:
+                await RAGCache().set_chunks(query_text, act_filter, result)
+            return result
+
+    def _apply_rerank(
+        self,
+        chunks: list[dict[str, Any]],
+        query: str,
+        *,
+        n_results: int,
+        min_similarity: float,
+        rerank: bool,
+    ) -> list[dict[str, Any]]:
+        """Apply hybrid BM25+semantic reranking then enforce relevance threshold."""
+        if not chunks:
+            return chunks
+
+        if rerank and len(chunks) > 1:
+            chunks = hybrid_rerank(chunks, query)
+            score_key = "hybrid_score"
+        else:
+            score_key = "similarity"
+
+        # Relevance threshold cutoff — filter low-confidence chunks
+        filtered = [c for c in chunks if c.get(score_key, 0) >= min_similarity]
+
+        # Gracefully fall back to top-N if threshold removes everything
+        if not filtered:
+            logger.warning(
+                "All %s chunks below threshold %.2f; returning top-%s unfiltered",
+                len(chunks), min_similarity, min(n_results, len(chunks)),
+            )
+            filtered = chunks[:n_results]
+
+        result = filtered[:n_results]
+        logger.info(
+            "RAG returned %s/%s chunks (rerank=%s, threshold=%.2f) for: %s...",
+            len(result), len(chunks), rerank, min_similarity, query[:60],
+        )
+        return result
 
     async def ingest_corpus(self, corpus_dir: str | None = None) -> dict[str, Any]:
         """
@@ -270,6 +346,48 @@ class RAGService:
             "errors": errors,
         }
 
+    async def ingest_urls(self, request: RAGUrlIngestRequest) -> dict[str, Any]:
+        """Ingest public/legal URLs into ChromaDB for RAG."""
+        collection = self._get_client()
+        if collection is None:
+            return {
+                "status": "skipped",
+                "reason": "ChromaDB not available; local corpus fallback is active",
+            }
+
+        timeout = httpx.Timeout(self._rag_settings.request_timeout_seconds)
+        headers = {"User-Agent": self._rag_settings.user_agent}
+        min_text_length = request.min_text_length or self._rag_settings.min_text_length
+
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers=headers) as client:
+            semaphore = asyncio.Semaphore(max(1, self._rag_settings.max_concurrency))
+
+            async def _run(item):
+                async with semaphore:
+                    try:
+                        return await self._ingest_url_item(
+                            item=item,
+                            client=client,
+                            collection=collection,
+                            chunk_size=request.chunk_size,
+                            overlap=request.overlap,
+                            min_text_length=min_text_length,
+                        )
+                    except Exception as exc:
+                        logger.exception("URL ingest failed for %s", getattr(item, "url", "unknown"))
+                        return RAGUrlIngestResult(url=str(item.url), status="error", reason=str(exc))
+
+            results: list[RAGUrlIngestResult] = list(await asyncio.gather(*[_run(item) for item in request.urls]))
+
+        summary = {
+            "status": "completed",
+            "ingested": sum(1 for r in results if r.status == "ingested"),
+            "skipped": sum(1 for r in results if r.status == "skipped"),
+            "errors": sum(1 for r in results if r.status == "error"),
+            "results": [r.model_dump() for r in results],
+        }
+        return summary
+
     def _resolve_corpus_path(self, corpus_dir: str | None = None) -> Path:
         if corpus_dir:
             path = Path(corpus_dir)
@@ -279,6 +397,124 @@ class RAGService:
             if backend_relative.exists():
                 return backend_relative
         return _default_corpus_dir()
+
+    async def _ingest_url_item(
+        self,
+        *,
+        item,
+        client: httpx.AsyncClient,
+        collection,
+        chunk_size: int,
+        overlap: int,
+        min_text_length: int,
+    ) -> RAGUrlIngestResult:
+        url = str(item.url)
+        if not self._is_url_allowed(url):
+            return RAGUrlIngestResult(url=url, status="skipped", reason="URL domain not allowed")
+
+        try:
+            content, content_type = await self._fetch_url_content(url, client)
+        except (httpx.HTTPError, ValueError) as exc:
+            return RAGUrlIngestResult(url=url, status="error", reason=str(exc))
+
+        text = self._extract_text(content, content_type)
+        if len(text) < min_text_length:
+            return RAGUrlIngestResult(
+                url=url,
+                status="skipped",
+                reason=f"Extracted text too short ({len(text)} chars)",
+            )
+
+        signals = analyze_text(text)
+        if self._rag_settings.redact_pii:
+            text = redact_pii(text)
+        stripped_lines = 0
+        if self._rag_settings.strip_prompt_injection:
+            text, stripped_lines = strip_prompt_injection(text)
+
+        content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        existing = collection.get(where={"content_hash": content_hash})
+        if existing and existing.get("ids"):
+            return RAGUrlIngestResult(url=url, status="skipped", reason="Duplicate content", content_hash=content_hash)
+
+        chunks = self._chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+        if not chunks:
+            return RAGUrlIngestResult(url=url, status="skipped", reason="No chunks generated")
+
+        now = datetime.now(timezone.utc).isoformat()
+        safe_source = re.sub(r"[^a-zA-Z0-9_-]+", "_", urlparse(url).netloc or "source")
+        ids = [f"url_{safe_source}_{content_hash[:12]}_{i}" for i in range(len(chunks))]
+        metadatas = [
+            {
+                "source": item.title or url,
+                "source_type": "url",
+                "url": url,
+                "act": item.act or "unknown",
+                "tags": item.tags,
+                "content_hash": content_hash,
+                "ingested_at": now,
+                "chunk_index": i,
+                "prompt_injection": signals.prompt_injection,
+                "pii_matches": signals.pii_matches,
+                "prompt_injection_stripped": stripped_lines,
+            }
+            for i in range(len(chunks))
+        ]
+
+        batch_size = 100
+        for start in range(0, len(chunks), batch_size):
+            end = start + batch_size
+            collection.upsert(
+                ids=ids[start:end],
+                documents=chunks[start:end],
+                metadatas=metadatas[start:end],
+            )
+
+        logger.info("Ingested %s chunks from URL %s", len(chunks), url)
+        return RAGUrlIngestResult(url=url, status="ingested", chunks=len(chunks), content_hash=content_hash)
+
+    def _is_url_allowed(self, url: str) -> bool:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("https", "http"):
+            return False
+        if parsed.scheme == "http" and not self._rag_settings.allow_http_urls:
+            return False
+        host = (parsed.hostname or "").lower()
+        allowed = [domain.strip().lower() for domain in self._rag_settings.allowed_url_domains if domain.strip()]
+        if not allowed:
+            return True
+        return any(host == domain or host.endswith(f".{domain}") for domain in allowed)
+
+    async def _fetch_url_content(
+        self, url: str, client: httpx.AsyncClient
+    ) -> tuple[str, str | None]:
+        max_bytes = self._rag_settings.max_url_bytes
+        async with client.stream("GET", url) as response:
+            response.raise_for_status()
+            final_url = str(response.url)
+            if not self._is_url_allowed(final_url):
+                raise ValueError(f"Redirected URL not allowed: {final_url}")
+            content_type = response.headers.get("content-type")
+            if content_type and not content_type.startswith("text/") and "html" not in content_type:
+                raise ValueError(f"Unsupported content-type: {content_type}")
+
+            body = bytearray()
+            async for chunk in response.aiter_bytes():
+                body.extend(chunk)
+                if len(body) > max_bytes:
+                    raise ValueError(f"Content exceeds max size ({max_bytes} bytes)")
+
+        try:
+            content = body.decode("utf-8", errors="ignore")
+        except UnicodeDecodeError as exc:
+            raise ValueError("Failed to decode response body as UTF-8") from exc
+
+        return content, content_type
+
+    def _extract_text(self, content: str, content_type: str | None) -> str:
+        if content_type and "html" in content_type:
+            return extract_text_from_html(content)
+        return normalize_whitespace(content)
 
     def _query_local_corpus(
         self,
@@ -390,13 +626,29 @@ class RAGService:
         )
         return chunks, metas
 
-    def _chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
-        """Split text into overlapping chunks by character count."""
+    def _chunk_text(self, text: str, chunk_size: int = 900, overlap: int = 50) -> list[str]:
+        """
+        Sentence-boundary aware chunking (primary) with character fallback.
+
+        Prefers splitting at sentence boundaries to preserve context.
+        Falls back to character-based splitting for very long texts without
+        sentence breaks (e.g. dense legal tables).
+        """
         if chunk_size <= 0:
             raise ValueError("chunk_size must be positive")
-        if overlap < 0 or overlap >= chunk_size:
-            raise ValueError("overlap must be non-negative and smaller than chunk_size")
 
+        # Try sentence-boundary chunking first
+        sent_chunks = sentence_boundary_chunk(
+            text,
+            target_size=chunk_size,
+            overlap_sentences=2,
+        )
+        if sent_chunks:
+            return sent_chunks
+
+        # Fallback: character-based splitting
+        if overlap < 0 or overlap >= chunk_size:
+            overlap = min(50, chunk_size // 5)
         chunks = []
         start = 0
         while start < len(text):

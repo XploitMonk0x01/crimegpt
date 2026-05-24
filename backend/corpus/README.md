@@ -34,3 +34,20 @@ result = asyncio.run(rag.ingest_corpus('./corpus'))
 print(result)
 "
 ```
+
+## URL Ingestion (Public Legal Sources)
+
+To ingest public legal sources from URLs (admin-only), call the API endpoint:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/legal/corpus/ingest-urls \
+  -H "Authorization: Bearer <admin_jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "urls": [
+      {"url": "https://indiacode.nic.in/...", "act": "bns_2023"}
+    ]
+  }'
+```
+
+Use `RAG_ALLOWED_DOMAINS` in `.env` to allowlist trusted domains.

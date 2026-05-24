@@ -9,8 +9,10 @@ from app.db.session import get_db
 from app.middleware.auth import get_current_user
 from app.middleware.rbac import require_role
 from app.models.officer import Officer
+from app.schemas.rag_schema import RAGUrlIngestRequest
 from app.services.legalService import LegalService
 from app.services.ragService import RAGService
+from app.types.enums import OfficerRole
 
 router = APIRouter()
 
@@ -41,7 +43,7 @@ async def search_sections(
 @router.post(
     "/corpus/ingest",
     summary="Ingest Legal Corpus into RAG",
-    dependencies=[Depends(require_role("admin"))],
+    dependencies=[Depends(require_role(OfficerRole.ADMIN))],
 )
 async def ingest_corpus(
     corpus_dir: str = Query(default="./corpus", description="Path to corpus directory"),
@@ -53,6 +55,21 @@ async def ingest_corpus(
     return {"success": True, "data": result}
 
 
+@router.post(
+    "/corpus/ingest-urls",
+    summary="Ingest Legal URLs into RAG",
+    dependencies=[Depends(require_role(OfficerRole.ADMIN))],
+)
+async def ingest_urls(
+    body: RAGUrlIngestRequest,
+    officer: Officer = Depends(get_current_user),
+):
+    """Admin-only: Ingest public legal URLs into ChromaDB vector store."""
+    rag = RAGService()
+    result = await rag.ingest_urls(body)
+    return {"success": True, "data": result}
+
+
 @router.get("/corpus/stats", summary="RAG Corpus Statistics")
 async def corpus_stats(
     officer: Officer = Depends(get_current_user),
@@ -61,4 +78,3 @@ async def corpus_stats(
     rag = RAGService()
     stats = await rag.get_stats()
     return {"success": True, "data": stats}
-

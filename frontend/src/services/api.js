@@ -121,15 +121,23 @@ export const dashboardService = {
 
 // ─────────────── Evidence Service ───────────────
 export const evidenceService = {
-  upload: async (file, firId, description = '') => {
+  upload: async (file, firId, description = '', tags = '') => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('fir_id', firId);
     formData.append('description', description);
+    formData.append('tags', tags);
     const response = await api.post('/evidence/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
+  },
+  listByFir: async (firId) => {
+    const response = await api.get(`/evidence/fir/${firId}`);
+    return response.data;
+  },
+  downloadUrl: (evidenceId) => {
+    return `${api.defaults.baseURL}/evidence/${evidenceId}/download`;
   },
   getCustody: async (evidenceId) => {
     const response = await api.get(`/evidence/${evidenceId}/custody`);

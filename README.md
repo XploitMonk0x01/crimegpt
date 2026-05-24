@@ -303,6 +303,11 @@ REDIS_URL=redis://localhost:6379
 # AI
 GROQ_API_KEY=your_groq_api_key_here
 
+# RAG ingestion (optional)
+RAG_ALLOWED_DOMAINS=indiacode.nic.in,legislative.gov.in
+RAG_STRIP_PROMPT_INJECTION=true
+RAG_REDACT_PII=false
+
 # Auth
 JWT_SECRET=your_jwt_secret
 ```

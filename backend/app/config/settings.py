@@ -102,6 +102,33 @@ class ChromaSettings(BaseSettings):
     model_config = {"env_prefix": "", "extra": "ignore", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 
+class RAGSettings(BaseSettings):
+    """RAG ingestion and safety controls."""
+
+    allowed_url_domains: list[str] = Field(default_factory=list, alias="RAG_ALLOWED_DOMAINS")
+    allow_http_urls: bool = Field(default=False, alias="RAG_ALLOW_HTTP_URLS")
+    max_url_bytes: int = Field(default=2_000_000, alias="RAG_MAX_URL_BYTES")  # 2 MB
+    request_timeout_seconds: float = Field(default=12.0, alias="RAG_REQUEST_TIMEOUT_SECONDS")
+    max_concurrency: int = Field(default=4, alias="RAG_MAX_CONCURRENCY")
+    min_text_length: int = Field(default=400, alias="RAG_MIN_TEXT_LENGTH")
+    user_agent: str = Field(
+        default="CrimeGPT-RAG-Ingest/1.0 (+https://github.com/XploitMonk0x01/crimegpt)",
+        alias="RAG_USER_AGENT",
+    )
+
+    # Safety controls
+    strip_prompt_injection: bool = Field(default=True, alias="RAG_STRIP_PROMPT_INJECTION")
+    redact_pii: bool = Field(default=False, alias="RAG_REDACT_PII")
+
+    model_config = {
+        "env_prefix": "",
+        "extra": "ignore",
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "env_parse_delimiter": ",",
+    }
+
+
 class SentrySettings(BaseSettings):
     """Sentry observability configuration."""
 
@@ -150,6 +177,7 @@ class Settings(BaseSettings):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
     chroma: ChromaSettings = Field(default_factory=ChromaSettings)
+    rag: RAGSettings = Field(default_factory=RAGSettings)
     sentry: SentrySettings = Field(default_factory=SentrySettings)
     evidence: EvidenceSettings = Field(default_factory=EvidenceSettings)
 

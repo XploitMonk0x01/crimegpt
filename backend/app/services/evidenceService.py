@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -50,6 +51,7 @@ class EvidenceService:
         officer: Officer,
         *,
         description: str = "",
+        tags: list[str] | None = None,
         ip_address: str = "unknown",
     ) -> dict[str, Any]:
         """Upload evidence file with SHA-256 integrity hash."""
@@ -100,6 +102,7 @@ class EvidenceService:
                 "content_type": file.content_type,
                 "size_bytes": len(content),
                 "description": description,
+                "tags": tags or [],
             },
             chain_of_custody=[custody_entry],
             stored_path=str(file_path),
@@ -195,3 +198,34 @@ class EvidenceService:
             "current_hash": current_hash,
             "match": match,
         }
+
+    async def list_by_fir(self, fir_id: uuid.UUID) -> list[dict[str, Any]]:
+        """List all evidence metadata for an FIR."""
+        stmt = select(Evidence).where(Evidence.fir_id == fir_id).order_by(Evidence.uploaded_at.desc())
+        result = await self._db.execute(stmt)
+        items = result.scalars().all()
+        
+        return [
+            {
+                "id": str(item.id),
+                "filename": item.filename,
+                "file_type": item.file_type,
+                "file_size": item.file_size_bytes,
+                "uploaded_at": item.uploaded_at.isoformat() if item.uploaded_at else None,
+                "tags": (item.metadata_json or {}).get("tags", []),
+                "description": (item.metadata_json or {}).get("description", ""),
+            }
+            for item in items
+        ]
+
+    async def get_file(self, evidence_id: uuid.UUID) -> Path:
+        """Get the absolute path to the stored file for downloading."""
+        evidence = await self._repo.get_by_id(evidence_id)
+        if not evidence:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+        
+        file_path = Path(evidence.stored_path)
+        if not file_path.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file missing from disk")
+            
+        return file_path
