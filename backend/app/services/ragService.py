@@ -49,9 +49,16 @@ class FastEmbedEmbeddingFunction:
         try:
             from fastembed import TextEmbedding
             self._model = TextEmbedding(model_name=model_name)
+            self._model_name = model_name
         except ImportError:
             logger.warning("fastembed not installed; local embedding function disabled.")
             self._model = None
+            self._model_name = model_name
+
+    @property
+    def name(self) -> str:
+        """Return the embedding function name for ChromaDB v2 compatibility."""
+        return f"fastembed_{self._model_name.split('/')[-1]}"
 
     def __call__(self, input: list[str]) -> list[list[float]]:
         if not self._model:
@@ -129,13 +136,9 @@ class RAGService:
                 # Verify server availability before loading embedding weights.
                 self._client.heartbeat()
 
-                if self._embedding_fn is None:
-                    logger.info("Initializing FastEmbed embedding model...")
-                    self._embedding_fn = FastEmbedEmbeddingFunction()
-
+                # Use ChromaDB's default embedding function for v2 compatibility
                 self._collection = self._client.get_or_create_collection(
                     name=self._settings.chroma.collection_name,
-                    embedding_function=self._embedding_fn,
                     metadata={"hnsw:space": "cosine"},
                 )
                 logger.info(
