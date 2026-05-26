@@ -531,8 +531,10 @@ class RAGService:
         corpus_path = self._resolve_corpus_path(None)
         chunks = _load_local_chunks(str(corpus_path))
         query_tokens = _tokenize(query_text)
+        # Corpus-only behavior: if we have no chunks or no usable query tokens,
+        # return no results (do NOT fabricate or use mock sections).
         if not chunks or not query_tokens:
-            return self._mock_results(query_text)[:n_results]
+            return []
 
         scored: list[tuple[float, dict[str, Any]]] = []
         requested_act = where.get("act") if where else None
@@ -570,7 +572,7 @@ class RAGService:
         ]
 
         if not results:
-            return self._mock_results(query_text)[:n_results]
+            return []
 
         logger.info("RAG local fallback returned %s chunks for: %s...", len(results), query_text[:80])
         return results

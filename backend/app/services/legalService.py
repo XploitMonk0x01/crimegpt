@@ -24,12 +24,14 @@ _LEGAL_SYSTEM_PROMPT = """You are LexBot, an AI legal assistant for Indian Law E
 You specialize in the Bharatiya Nyaya Sanhita (BNS) 2023, IT Act 2000, POCSO Act, and related Indian criminal law.
 
 Rules:
-1. Always cite specific sections and sub-sections
-2. Provide clear, actionable legal guidance
-3. If unsure, say so — never fabricate legal references
-4. Use simple language understandable by police officers
-5. When multiple sections apply, list them in order of relevance
-6. Include maximum imprisonment/fine details when available
+1. Answer ONLY using the provided legal corpus context
+2. Always cite specific sections/sub-sections when you make a legal claim
+3. Never fabricate legal references or facts
+4. If the corpus context does not contain the answer, reply with exactly:
+   Out of scope: This question is not answered by the provided legal corpus.
+5. Use simple language understandable by police officers
+6. When multiple sections apply, list them in order of relevance
+7. Include maximum imprisonment/fine details when available
 """
 
 
@@ -62,6 +64,29 @@ class LegalService:
         chunks = await self._rag.query(
             search_query, n_results=8, where=where, min_similarity=0.12, rerank=True
         )
+
+        # If retrieval yields nothing, refuse deterministically (no LLM call).
+        if not chunks:
+            result = {
+                "question": question,
+                "answer": "Out of scope: This question is not answered by the provided legal corpus.",
+                "sources": [],
+                "language": language,
+                "chunks_retrieved": 0,
+                "retrieval": {
+                    "query": search_query,
+                    "act_filter": where,
+                    "source_types": {},
+                },
+                "safety": {
+                    "prompt_injection": 0,
+                    "prompt_injection_stripped": 0,
+                    "pii_matches": {"email": 0, "phone": 0, "aadhaar": 0},
+                },
+                "cached": False,
+            }
+            await cache.set_answer(question, act_filter, language, result)
+            return result
 
         context_parts = []
         sources = []
@@ -105,9 +130,12 @@ class LegalService:
         user_prompt = (
             f"Legal Question: {question}\n\n"
             f"Relevant Legal Context:\n{context}\n\n"
-            f"Instructions: Answer using the provided legal context first. "
-            f"Cite source numbers and specific sections. If the context does not cover the question, "
-            f"state the limitation clearly before providing general guidance. "
+            "Instructions:\n"
+            "- You MUST answer ONLY using the Relevant Legal Context above.\n"
+            "- Cite source numbers and specific sections ONLY when they appear in the context.\n"
+            "- If the context does not answer the question, reply with exactly:\n"
+            "  Out of scope: This question is not answered by the provided legal corpus.\n"
+            "- Do NOT provide general knowledge, external links, or guidance outside the corpus.\n"
             f"Respond in language code: {language}."
         )
 
@@ -176,6 +204,8 @@ class LegalService:
             min_similarity=0.10,
             rerank=True,
         )
+        if not candidate_chunks:
+            return []
         context = "\n\n".join(
             f"[Candidate {i + 1} | Section: {chunk.get('metadata', {}).get('section', 'unknown')}] {chunk['text']}"
             for i, chunk in enumerate(candidate_chunks)
