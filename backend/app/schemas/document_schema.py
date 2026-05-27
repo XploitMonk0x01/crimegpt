@@ -79,3 +79,23 @@ class DocumentTypesResponse(BaseModel):
     """List of available document types."""
 
     types: list[DocumentTypeInfo]
+
+
+class DocumentVersionInfo(BaseModel):
+    """Stored document version metadata."""
+
+    id: uuid.UUID
+    fir_id: uuid.UUID
+    document_type: DocumentType
+    version_no: int
+    title: str
+    content: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    changed_by: uuid.UUID
+    changed_at: datetime
+
+
+class DocumentVersionListResponse(BaseModel):
+    """List response for document versions."""
+
+    versions: list[DocumentVersionInfo]

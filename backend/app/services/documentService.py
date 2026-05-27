@@ -20,11 +20,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fir import FIR
 from app.models.evidence import Evidence
 from app.models.officer import Officer
+from app.models.document_version import DocumentVersion
 from app.repositories.FIRRepository import FIRRepository
 from app.services.llmService import LLMService
 from app.services.auditService import AuditService
@@ -256,6 +258,22 @@ class DocumentService:
             },
         )
 
+        version = await self._store_version(
+            fir_id=fir.id,
+            document_type=document_type,
+            title=template["label"],
+            content=content.strip(),
+            metadata={
+                "complainant": fir.complainant,
+                "accused": fir.accused,
+                "location": fir.location,
+                "officer_badge": officer.badge_no,
+                "sections_used": fir.sections or [],
+                "language": language,
+            },
+            officer_id=officer.id,
+        )
+
         logger.info(
             f"Document [{document_type.value}] generated for FIR {fir.fir_no} by {officer.badge_no}"
         )
@@ -275,6 +293,8 @@ class DocumentService:
             },
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "language": language,
+            "version_no": version.version_no,
+            "version_id": str(version.id),
         }
 
     def _build_case_data(self, fir: FIR, additional_context: str | None = None) -> str:
@@ -361,3 +381,55 @@ class DocumentService:
             }
             for doc_type, template in _DOC_TEMPLATES.items()
         ]
+
+
+    async def _store_version(
+        self,
+        *,
+        fir_id: uuid.UUID,
+        document_type: DocumentType,
+        title: str,
+        content: str,
+        metadata: dict[str, Any],
+        officer_id: uuid.UUID,
+    ) -> DocumentVersion:
+        """Persist immutable document version snapshot."""
+        stmt = (
+            select(func.max(DocumentVersion.version_no))
+            .where(DocumentVersion.fir_id == fir_id)
+            .where(DocumentVersion.document_type == document_type.value)
+        )
+        result = await self._db.execute(stmt)
+        current_max = result.scalar()
+        next_version = (current_max or 0) + 1
+
+        record = DocumentVersion(
+            fir_id=fir_id,
+            document_type=document_type.value,
+            version_no=next_version,
+            title=title,
+            content=content,
+            metadata=metadata,
+            changed_by=officer_id,
+        )
+        self._db.add(record)
+        await self._db.flush()
+        return record
+
+    async def list_versions(self, *, fir_id: uuid.UUID, document_type: DocumentType) -> list[DocumentVersion]:
+        stmt = (
+            select(DocumentVersion)
+            .where(DocumentVersion.fir_id == fir_id)
+            .where(DocumentVersion.document_type == document_type.value)
+            .order_by(DocumentVersion.version_no.desc())
+        )
+        result = await self._db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_version(self, *, version_id: uuid.UUID) -> DocumentVersion:
+        stmt = select(DocumentVersion).where(DocumentVersion.id == version_id)
+        result = await self._db.execute(stmt)
+        version = result.scalar_one_or_none()
+        if not version:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document version not found")
+        return version

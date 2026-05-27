@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "description": "Day 3 legal intelligence benchmark prompts for BNS/BNSS/BSA mapping checks.",
+  "cases": [
+    {
+      "id": "LB-001",
+      "query": "A suspect stole OTP details and emptied a victim's bank account using phishing links.",
+      "expected_sections": ["BNS-318", "IT-66C", "IT-66D"],
+      "notes": "Cyber fraud + identity misuse"
+    },
+    {
+      "id": "LB-002",
+      "query": "A group entered a shop at night and broke locks to steal valuables.",
+      "expected_sections": ["BNS-331", "BNS-305"],
+      "notes": "House breaking and theft"
+    },
+    {
+      "id": "LB-003",
+      "query": "The accused threatened a witness with violence to force withdrawal of statement.",
+      "expected_sections": ["BNS-351", "BNS-352"],
+      "notes": "Criminal intimidation / coercion"
+    },
+    {
+      "id": "LB-004",
+      "query": "What is the best laptop to buy for gaming?",
+      "expected_behavior": "refuse_out_of_scope",
+      "notes": "Must reject non-legal query"
+    }
+  ]
+}
