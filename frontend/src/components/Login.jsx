@@ -4,6 +4,35 @@ import { Shield, ArrowRight, Lock } from 'lucide-react';
 import { authService } from '../services/api';
 import useAuthStore from '../store/authStore';
 
+const DEMO_USERS = {
+  admin: { badge: 'PN-2024-ADMIN', pin: '1234', role: 'admin' },
+  sho: { badge: 'PN-2024-SHO', pin: '5678', role: 'sho' },
+  io: { badge: 'PN-2024-IO', pin: '5678', role: 'io' },
+};
+
+const MOCK_USERS = {
+  sho: {
+    user: { id: '00000000-0000-0000-0000-000000000001', name: 'SHO Officer (Demo)', badge_no: 'PN-2024-SHO', role: 'sho', is_active: true },
+    token: 'demo-sho-token',
+  },
+  io: {
+    user: { id: '00000000-0000-0000-0000-000000000002', name: 'IO Officer (Demo)', badge_no: 'PN-2024-IO', role: 'io', is_active: true },
+    token: 'demo-io-token',
+  },
+};
+
+const ROLE_DOT = {
+  admin: 'bg-green-400',
+  sho: 'bg-yellow-400',
+  io: 'bg-blue-400',
+};
+
+const ROLE_LABEL = {
+  admin: 'Admin Officer',
+  sho: 'SHO Officer',
+  io: 'IO Officer',
+};
+
 export default function Login() {
   const [badgeNo, setBadgeNo] = useState('');
   const [pin, setPin] = useState('');
@@ -28,6 +57,32 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDemoLogin = async (roleKey) => {
+    setLoading(true);
+    setError('');
+    const { badge, pin: demoPin, role } = DEMO_USERS[roleKey];
+
+    try {
+      const response = await authService.login(badge, demoPin);
+      if (response.success) {
+        setAuth(response.data.officer, response.data.access_token);
+        return;
+      }
+    } catch (_err) {
+      // Backend doesn't have this demo user — fall through to mock
+    }
+
+    // Fallback: mock auth for SHO / IO
+    if (MOCK_USERS[role]) {
+      const { user, token } = MOCK_USERS[role];
+      setAuth(user, token);
+    } else {
+      setError('DEMO_LOGIN_FAILED');
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -99,7 +154,37 @@ export default function Login() {
           </button>
         </motion.form>
 
-        <div className="mt-12 pt-8 border-t border-border/10 flex items-center justify-between opacity-30">
+        {/* DEMO ACCESS */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="mt-8"
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex-1 h-px bg-border/20" />
+            <p className="label-mono text-[8px] text-muted-foreground/30 uppercase tracking-widest">Demo Access</p>
+            <div className="flex-1 h-px bg-border/20" />
+          </div>
+          <div className="flex gap-2">
+            {(['admin', 'sho', 'io']).map((roleKey) => (
+              <button
+                key={roleKey}
+                type="button"
+                disabled={loading}
+                onClick={() => handleDemoLogin(roleKey)}
+                className="flex-1 flex items-center gap-1.5 px-3 py-2.5 bg-muted/30 hover:bg-muted/60 border border-border/20 hover:border-border/40 transition-all group disabled:opacity-40"
+              >
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ROLE_DOT[roleKey]}`} />
+                <span className="label-mono text-[8px] uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors truncate">
+                  {ROLE_LABEL[roleKey]}
+                </span>
+              </button>
+            ))}
+          </div>
+        </motion.div>
+
+        <div className="mt-8 pt-8 border-t border-border/10 flex items-center justify-between opacity-30">
           <p className="label-mono text-[8px]">LOCAL_NODE_AH01</p>
           <p className="label-mono text-[8px]">AES_256_ENCRYPTED</p>
         </div>

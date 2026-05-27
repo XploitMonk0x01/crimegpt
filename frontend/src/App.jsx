@@ -13,13 +13,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import useAuthStore from './store/authStore';
 import { authService } from './services/api';
 import { Toaster } from 'react-hot-toast';
-import useFirStore from './store/firStore';
+
+
+// RBAC — must match Sidebar.jsx roles config
+const TAB_ROLES = {
+  dashboard: ['io', 'sho', 'admin'],
+  fir:       ['io', 'sho', 'admin'],
+  lexbot:    ['io', 'sho', 'admin'],
+  vault:     ['io', 'sho', 'admin'],
+  linkage:   ['sho', 'admin'],
+  documents: ['io', 'sho', 'admin'],
+  diary:     ['io', 'sho', 'admin'],
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { isAuthenticated, user, setAuth, logout } = useAuthStore();
-  const clearAll = useFirStore(s => s.clearAll);
+  const { isAuthenticated, user, token, setAuth, logout } = useAuthStore();
 
   useEffect(() => {
     // ONE-TIME HARD RESET FOR USER (V3)
@@ -34,6 +44,10 @@ export default function App() {
   useEffect(() => {
     const checkAuth = async () => {
       if (isAuthenticated && !user) {
+        // Skip API call for demo mock tokens — they don't have real backend sessions
+        const isDemoToken = token?.startsWith('demo-');
+        if (isDemoToken) return;
+
         try {
           const response = await authService.me();
           if (response.success) {
@@ -45,11 +59,16 @@ export default function App() {
       }
     };
     checkAuth();
-  }, [isAuthenticated, user, logout, setAuth]);
+  }, [isAuthenticated, user, token, logout, setAuth]);
 
   if (!isAuthenticated) {
     return <Login />;
   }
+
+  // RBAC route guard — resolve the effective tab (avoids setState in useEffect)
+  const role = user?.role || 'io';
+  const allowedRoles = TAB_ROLES[activeTab];
+  const effectiveTab = (allowedRoles && !allowedRoles.includes(role)) ? 'dashboard' : activeTab;
 
   return (
     <div className="flex bg-background text-foreground min-h-screen">
@@ -100,23 +119,24 @@ export default function App() {
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeTab}
+            key={effectiveTab}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: [0.25, 0, 0, 1] }}
             className="flex-1 overflow-y-auto relative custom-scrollbar"
           >
-            {activeTab === 'dashboard' && <Dashboard />}
-            {activeTab === 'fir' && <FIRAutomator />}
-            {activeTab === 'lexbot' && <LexBot />}
-            {activeTab === 'vault' && <Vault />}
-            {activeTab === 'linkage' && <CaseLinkage />}
-            {activeTab === 'documents' && <DocumentGenerator />}
-            {activeTab === 'diary' && <CaseDiary />}
+            {effectiveTab === 'dashboard' && <Dashboard />}
+            {effectiveTab === 'fir' && <FIRAutomator />}
+            {effectiveTab === 'lexbot' && <LexBot />}
+            {effectiveTab === 'vault' && <Vault />}
+            {effectiveTab === 'linkage' && <CaseLinkage />}
+            {effectiveTab === 'documents' && <DocumentGenerator />}
+            {effectiveTab === 'diary' && <CaseDiary />}
           </motion.div>
         </AnimatePresence>
       </main>
     </div>
   );
 }
+

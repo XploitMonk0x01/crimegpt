@@ -57,6 +57,18 @@ export const firService = {
     const response = await api.post('/fir/generate', { incident_description: description });
     return response.data;
   },
+  // Lightweight variant — extracts only recommended_sections for live NLP suggestions
+  analyzeNarrative: async (description) => {
+    try {
+      const response = await api.post('/fir/generate', { incident_description: description });
+      if (response.data?.success) {
+        return response.data?.data?.recommended_sections || [];
+      }
+    } catch {
+      // best-effort — silently ignore
+    }
+    return [];
+  },
   submit: async (data) => {
     const response = await api.post('/fir/submit', data);
     return response.data;

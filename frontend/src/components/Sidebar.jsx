@@ -12,21 +12,33 @@ import {
   Stamp,
   BookOpen
 } from 'lucide-react';
+import useAuthStore from '../store/authStore';
+
+const ROLE_BADGE_STYLES = {
+  admin: 'text-red-400 border-red-400/30',
+  sho: 'text-yellow-400 border-yellow-400/30',
+  io: 'text-blue-400 border-blue-400/30',
+};
 
 export default function Sidebar({ activeTab, setActiveTab, onSettingsClick }) {
   const [width, setWidth] = useState(220); // slightly wider so CrimeGPT label doesn't clip
   const [isResizing, setIsResizing] = useState(false);
   const isCollapsed = width <= 80;
 
+  const user = useAuthStore((s) => s.user);
+  const role = user?.role || 'io';
+
   const menuItems = [
-    { id: 'dashboard', label: 'Command', icon: LayoutDashboard },
-    { id: 'fir', label: 'Automator', icon: FileText },
-    { id: 'lexbot', label: 'LexBot', icon: MessageSquare },
-    { id: 'vault', label: 'Vault', icon: Database },
-    { id: 'linkage', label: 'Linkage', icon: Link2 },
-    { id: 'documents', label: 'Documents', icon: Stamp },
-    { id: 'diary', label: 'Diary', icon: BookOpen },
+    { id: 'dashboard', label: 'Command', icon: LayoutDashboard, roles: ['io', 'sho', 'admin'] },
+    { id: 'fir', label: 'Automator', icon: FileText, roles: ['io', 'sho', 'admin'] },
+    { id: 'lexbot', label: 'LexBot', icon: MessageSquare, roles: ['io', 'sho', 'admin'] },
+    { id: 'vault', label: 'Vault', icon: Database, roles: ['io', 'sho', 'admin'] },
+    { id: 'linkage', label: 'Linkage', icon: Link2, roles: ['sho', 'admin'] },
+    { id: 'documents', label: 'Documents', icon: Stamp, roles: ['io', 'sho', 'admin'] },
+    { id: 'diary', label: 'Diary', icon: BookOpen, roles: ['io', 'sho', 'admin'] },
   ];
+
+  const visibleMenuItems = menuItems.filter((item) => item.roles.includes(role));
 
   const startResizing = useCallback(() => {
     setIsResizing(true);
@@ -99,7 +111,7 @@ export default function Sidebar({ activeTab, setActiveTab, onSettingsClick }) {
 
       {/* Nav Section */}
       <nav className="flex-1 py-6 px-3 flex flex-col gap-1 overflow-hidden">
-        {menuItems.map((item) => (
+        {visibleMenuItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
@@ -130,6 +142,12 @@ export default function Sidebar({ activeTab, setActiveTab, onSettingsClick }) {
         
         {!isCollapsed && (
           <div className="mt-4 pt-4 border-t border-border px-2 overflow-hidden">
+            {/* Role Badge */}
+            <div className="mb-3">
+              <span className={`label-mono text-[8px] border px-2 py-0.5 uppercase inline-block ${ROLE_BADGE_STYLES[role] || ROLE_BADGE_STYLES['io']}`}>
+                {role}
+              </span>
+            </div>
             <p className="label-mono text-[8px] text-muted-foreground/50">NODE_STATUS</p>
             <p className="font-mono text-[9px] text-foreground mt-1 uppercase tracking-tighter truncate">AHM_SECURE_01</p>
           </div>

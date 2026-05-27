@@ -80,10 +80,15 @@ export default function FIRAutomator() {
   const [recommendedSections, setRecommendedSections] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [narrative, setNarrative] = useState('');
+  const [inputLang, setInputLang] = useState('en');
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [liveSections, setLiveSections] = useState([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const nlpTimerRef = useRef(null);
   
   const [formData, setFormData] = useState({
     complainant_name: '', complainant_contact: '', complainant_address: '',
@@ -116,6 +121,31 @@ export default function FIRAutomator() {
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
+
+  // Debounced live BNS section analysis
+  useEffect(() => {
+    if (nlpTimerRef.current) clearTimeout(nlpTimerRef.current);
+    if (narrative.trim().length < 30) {
+      setLiveSections([]);
+      setIsAnalyzing(false);
+      return;
+    }
+    setIsAnalyzing(true);
+    nlpTimerRef.current = setTimeout(async () => {
+      try {
+        const response = await firService.generate(narrative);
+        if (response.success) {
+          const sections = response.data?.recommended_sections || [];
+          setLiveSections(sections.slice(0, 5));
+        }
+      } catch {
+        // silently fail — live suggestions are best-effort
+      } finally {
+        setIsAnalyzing(false);
+      }
+    }, 800);
+    return () => { if (nlpTimerRef.current) clearTimeout(nlpTimerRef.current); };
+  }, [narrative]);
 
   // Format ID if type changes
   useEffect(() => {
@@ -188,7 +218,7 @@ export default function FIRAutomator() {
         try {
           const audioBlob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
           const response = await nlpService.transcribe(audioBlob, {
-            language: 'en',
+            language: inputLang,
             prompt: 'Indian police FIR incident narration with names, locations, dates, and offence details.',
           });
           const transcript = response.data?.text?.trim();
@@ -222,6 +252,23 @@ export default function FIRAutomator() {
   const handleVoiceInput = () => {
     if (isRecording) stopRecording();
     else startRecording();
+  };
+
+  const handleTranslate = async () => {
+    if (!narrative.trim() || inputLang === 'en') return;
+    setIsTranslating(true);
+    try {
+      const response = await nlpService.translate(narrative, inputLang, 'en');
+      if (response.success && response.data?.translated) {
+        setNarrative(response.data.translated);
+        setInputLang('en');
+        toast.success('TRANSLATED TO ENGLISH');
+      }
+    } catch (err) {
+      toast.error('TRANSLATION FAILED');
+    } finally {
+      setIsTranslating(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -346,6 +393,20 @@ export default function FIRAutomator() {
           <h1 className="text-6xl md:text-7xl font-bold tracking-tighter leading-none uppercase text-foreground/90">FIR Draft</h1>
         </div>
         <div className="flex flex-col items-start gap-4">
+          {/* Language toggle */}
+          <div className="flex gap-1">
+            {[{code:'en',label:'EN'},{code:'hi',label:'हि'},{code:'gu',label:'ગુ'}].map(l => (
+              <button
+                key={l.code}
+                onClick={() => setInputLang(l.code)}
+                className={`px-3 py-1.5 label-mono text-[9px] font-bold border transition-all ${
+                  inputLang === l.code
+                    ? 'bg-accent text-background border-accent'
+                    : 'border-border text-muted-foreground hover:border-foreground/30'
+                }`}
+              >{l.label}</button>
+            ))}
+          </div>
           <button 
             onClick={handleVoiceInput} disabled={isTranscribing}
             className={`flex items-center gap-2 px-6 py-3 font-bold text-base uppercase tracking-tighter transition-all border-2 ${
@@ -353,7 +414,7 @@ export default function FIRAutomator() {
             }`}
           >
             <Mic size={18} />
-            {isTranscribing ? 'Transcribing...' : isRecording ? 'Stop Recording' : 'Voice Input'}
+            {isTranscribing ? 'Transcribing...' : isRecording ? 'Stop Recording' : `Voice (${inputLang.toUpperCase()})`}
           </button>
           {(audioError || isRecording) && (
             <p className={`label-mono text-[9px] ${audioError ? 'text-accent' : 'text-muted-foreground/50'}`}>
@@ -365,12 +426,51 @@ export default function FIRAutomator() {
 
       {/* Narrative */}
       <div className="border-t-4 border-foreground/10 pt-6 pb-8">
-        <p className="label-mono mb-2 text-muted-foreground text-[8px]">Incident Narrative (Natural Language Input)</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="label-mono text-muted-foreground text-[8px]">Incident Narrative (Natural Language Input)</p>
+          {inputLang !== 'en' && (
+            <button
+              onClick={handleTranslate}
+              disabled={isTranslating || !narrative.trim()}
+              className="flex items-center gap-1.5 label-mono text-[8px] border border-accent/40 text-accent px-3 py-1 hover:bg-accent hover:text-background transition-all disabled:opacity-50"
+            >
+              {isTranslating ? <><Loader2 size={10} className="animate-spin" /> Translating...</> : <>↔ Translate to English</>}
+            </button>
+          )}
+        </div>
         <textarea 
           value={narrative} onChange={(e) => setNarrative(e.target.value)}
           className="w-full bg-transparent border border-foreground/10 rounded-md p-3 text-lg md:text-xl font-medium tracking-tight placeholder:text-muted-foreground/10 focus:outline-none focus:border-foreground/30 min-h-[120px] leading-relaxed text-foreground/70"
-          placeholder="Describe the incident in detail. AI will auto-fill structured fields below."
+          placeholder={inputLang === 'hi' ? 'घटना का विवरण यहाँ लिखें...' : inputLang === 'gu' ? 'ઘટનાનું વર્ણન અહીં લખો...' : 'Describe the incident in detail. AI will auto-fill structured fields below.'}
         />
+        {/* Live BNS section suggestions */}
+        <div className="mt-3 min-h-[28px]">
+          {isAnalyzing && narrative.trim().length >= 30 && (
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />
+              <span className="label-mono text-[8px] text-muted-foreground/50">ANALYSING NARRATIVE FOR BNS SECTIONS...</span>
+            </div>
+          )}
+          {!isAnalyzing && liveSections.length > 0 && (
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="label-mono text-[7px] text-muted-foreground/40 uppercase">Suggested:</span>
+              {liveSections.map((section) => (
+                <button
+                  key={section}
+                  onClick={() => {
+                    if (!recommendedSections.includes(section)) {
+                      setRecommendedSections(prev => [...prev, section]);
+                    }
+                  }}
+                  className="label-mono text-[8px] border border-accent/30 text-accent/80 px-2 py-0.5 hover:bg-accent hover:text-background transition-all"
+                  title="Click to add to FIR"
+                >
+                  + {section}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Form Sections */}
