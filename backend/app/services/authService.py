@@ -16,6 +16,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from math import ceil
 
 import redis.asyncio as aioredis
 from fastapi import HTTPException, status
@@ -148,6 +149,42 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token is not a refresh token",
+            )
+
+        refresh_jti = payload.get("jti")
+        refresh_exp = payload.get("exp")
+        if not refresh_jti or not refresh_exp:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Malformed refresh token",
+            )
+
+        # Enforce single-use refresh token rotation.
+        # We atomically mark this refresh token as consumed using Redis NX semantics.
+        # If the key already exists, the token was already used and must be rejected.
+        if not self._redis:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Refresh rotation unavailable. Please login again.",
+            )
+
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        ttl_seconds = max(1, ceil(refresh_exp - now_ts))
+        consumed_key = f"refresh:consumed:{refresh_jti}"
+
+        try:
+            consumed = await self._redis.set(consumed_key, "1", ex=ttl_seconds, nx=True)
+        except Exception as exc:
+            logger.error(f"Refresh token rotation check failed: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Refresh rotation unavailable. Please login again.",
+            )
+
+        if not consumed:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token already used",
             )
 
         # Verify officer still exists and is active

@@ -74,6 +74,18 @@ export default function Sidebar({ activeTab, setActiveTab, onSettingsClick }) {
     }
   };
 
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        toggleCollapse();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isCollapsed]);
+
   return (
     <div 
       style={{ width: `${width}px` }}

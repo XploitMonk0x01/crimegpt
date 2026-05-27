@@ -70,3 +70,56 @@ async def export_pdf(
             "Content-Disposition": f'attachment; filename="{body.document_type.value}_{body.fir_number or "doc"}.pdf"'
         },
     )
+
+
+@router.get("/{fir_id}/versions", summary="List Document Versions")
+async def list_document_versions(
+    fir_id: uuid.UUID,
+    document_type: DocumentType = Query(..., description="Document type"),
+    officer: Officer = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List stored versions for a FIR and document type."""
+    service = DocumentService(db)
+    versions = await service.list_versions(fir_id=fir_id, document_type=document_type)
+    return {
+        "success": True,
+        "data": [
+            {
+                "id": str(v.id),
+                "fir_id": str(v.fir_id),
+                "document_type": v.document_type,
+                "version_no": v.version_no,
+                "title": v.title,
+                "metadata": v.metadata,
+                "changed_by": str(v.changed_by),
+                "changed_at": v.changed_at.isoformat(),
+            }
+            for v in versions
+        ],
+    }
+
+
+@router.get("/versions/{version_id}", summary="Get Document Version")
+async def get_document_version(
+    version_id: uuid.UUID,
+    officer: Officer = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get one stored document version snapshot."""
+    service = DocumentService(db)
+    version = await service.get_version(version_id=version_id)
+    return {
+        "success": True,
+        "data": {
+            "id": str(version.id),
+            "fir_id": str(version.fir_id),
+            "document_type": version.document_type,
+            "version_no": version.version_no,
+            "title": version.title,
+            "content": version.content,
+            "metadata": version.metadata,
+            "changed_by": str(version.changed_by),
+            "changed_at": version.changed_at.isoformat(),
+        },
+    }
