@@ -19,7 +19,7 @@ class DocumentVersion(Base):
     version_no: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
     changed_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("officers.id"), nullable=False)
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 

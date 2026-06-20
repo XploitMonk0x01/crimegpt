@@ -91,7 +91,7 @@ async def list_document_versions(
                 "document_type": v.document_type,
                 "version_no": v.version_no,
                 "title": v.title,
-                "metadata": v.metadata,
+                "metadata": v.meta_data,
                 "changed_by": str(v.changed_by),
                 "changed_at": v.changed_at.isoformat(),
             }
@@ -118,7 +118,7 @@ async def get_document_version(
             "version_no": version.version_no,
             "title": version.title,
             "content": version.content,
-            "metadata": version.metadata,
+            "metadata": version.meta_data,
             "changed_by": str(version.changed_by),
             "changed_at": version.changed_at.isoformat(),
         },

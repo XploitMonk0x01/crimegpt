@@ -90,7 +90,7 @@ class DocumentVersionInfo(BaseModel):
     version_no: int
     title: str
     content: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict, validation_alias="meta_data")
     changed_by: uuid.UUID
     changed_at: datetime
 

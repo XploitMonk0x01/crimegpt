@@ -409,7 +409,7 @@ class DocumentService:
             version_no=next_version,
             title=title,
             content=content,
-            metadata=metadata,
+            meta_data=metadata,
             changed_by=officer_id,
         )
         self._db.add(record)
