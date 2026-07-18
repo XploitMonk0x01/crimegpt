@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Shield, Bell, Lock, Moon, Sun, LogOut, ChevronRight } from 'lucide-react';
+import { X, User, Shield, Bell, Lock, Moon, Sun, LogOut, ChevronRight, Save, Activity, GitBranch, Cpu } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
 const SettingRow = ({ icon: Icon, label, children }) => (
@@ -151,7 +151,7 @@ export default function UserSettings({ isOpen, onClose }) {
                 <SettingRow icon={Moon} label="Dark Mode">
                   <Toggle value={darkMode} onChange={setDarkMode} />
                 </SettingRow>
-                <SettingRow icon={Shield} label="Auto-Save Drafts">
+                <SettingRow icon={Save} label="Auto-Save Drafts">
                   <Toggle value={autoSave} onChange={setAutoSave} />
                 </SettingRow>
               </div>
@@ -164,7 +164,7 @@ export default function UserSettings({ isOpen, onClose }) {
                     {user?.role?.toUpperCase() || 'OFFICER'}
                   </span>
                 </SettingRow>
-                <SettingRow icon={Shield} label="Session">
+                <SettingRow icon={Activity} label="Session">
                   <span className="label-mono text-[10px] text-green-400">ACTIVE</span>
                 </SettingRow>
               </div>
@@ -172,10 +172,10 @@ export default function UserSettings({ isOpen, onClose }) {
               {/* App Info */}
               <div>
                 <p className="label-mono text-[8px] text-accent mb-4 tracking-widest">— SYSTEM</p>
-                <SettingRow icon={Shield} label="Version">
+                <SettingRow icon={GitBranch} label="Version">
                   <span className="label-mono text-[10px] text-muted-foreground">CrimeGPT v1.0.0</span>
                 </SettingRow>
-                <SettingRow icon={Shield} label="Node">
+                <SettingRow icon={Cpu} label="Node">
                   <span className="label-mono text-[10px] text-muted-foreground">AHM_SECURE_01</span>
                 </SettingRow>
               </div>
