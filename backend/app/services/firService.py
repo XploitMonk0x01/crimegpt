@@ -122,12 +122,16 @@ class FIRService:
             confidence_score=0.85,  # Heuristic for now
         )
 
-        await self._audit.log(
-            officer_id=officer.id,
-            action=AuditAction.FIR_CREATE,
-            resource_type=ResourceType.FIR,
-            details={"phase": "draft_generation", "language": request.language},
-        )
+        try:
+            await self._audit.log(
+                officer_id=officer.id,
+                action=AuditAction.FIR_CREATE,
+                resource_type=ResourceType.FIR,
+                details={"phase": "draft_generation", "language": request.language},
+            )
+        except Exception as audit_err:
+            # Audit failure must never crash the primary business flow
+            logger.warning(f"Audit log failed for draft generation: {audit_err}")
 
         return draft
 

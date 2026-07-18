@@ -299,11 +299,31 @@ export default function FIRAutomator() {
         toast.success('FIR DRAFT GENERATED SUCCESSFULLY');
       }
     } catch (err) { 
-      console.error("AI Generation Failed", err); 
-      const errMsg = err.response?.data?.errors?.[0]?.message 
-                 || err.response?.data?.message 
-                 || err.response?.data?.detail?.[0]?.msg 
-                 || "AI Generation failed. Ensure the narrative is at least 20 characters long.";
+      console.error("AI Generation Failed", err);
+      let errMsg;
+      const data = err.response?.data;
+      if (!err.response) {
+        // Network error — backend not reachable
+        errMsg = "Cannot reach the server. Please ensure the backend is running.";
+      } else if (err.response.status === 401) {
+        errMsg = "Session expired. Please log in again.";
+      } else if (err.response.status === 422) {
+        // FastAPI Pydantic validation error — detail is an array of objects
+        const detail = data?.detail;
+        if (Array.isArray(detail)) {
+          errMsg = detail.map(d => d.msg || d.message).filter(Boolean).join('; ');
+        } else if (typeof detail === 'string') {
+          errMsg = detail;
+        } else {
+          errMsg = "Validation error. Please check your input.";
+        }
+      } else {
+        // Other server errors
+        errMsg = data?.message
+          || data?.detail
+          || data?.errors?.[0]?.message
+          || `Server error (${err.response.status}). Please try again.`;
+      }
       setGenerationError(errMsg);
       toast.error('AI GENERATION FAILED');
     } finally { 
