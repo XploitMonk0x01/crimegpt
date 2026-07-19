@@ -318,22 +318,22 @@ export default function Dashboard() {
                 <div className="space-y-6">
                   <div>
                     <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Complainant</p>
-                    <p className="text-xl font-bold tracking-tight uppercase">{selectedFir.complainant?.name || 'NOT SPECIFIED'}</p>
+                    <p className="text-xl font-bold tracking-tight uppercase">{typeof selectedFir.complainant?.name === 'object' ? JSON.stringify(selectedFir.complainant?.name) : (selectedFir.complainant?.name || 'NOT SPECIFIED')}</p>
                   </div>
                   <div>
                     <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Contact Details</p>
-                    <p className="text-base font-medium text-foreground/80">{selectedFir.complainant?.contact || selectedFir.complainant?.phone || '—'}</p>
+                    <p className="text-base font-medium text-foreground/80">{typeof (selectedFir.complainant?.contact || selectedFir.complainant?.phone) === 'object' ? JSON.stringify(selectedFir.complainant?.contact || selectedFir.complainant?.phone) : (selectedFir.complainant?.contact || selectedFir.complainant?.phone || '—')}</p>
                   </div>
                   <div>
                     <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Identity Proof</p>
-                    <p className="text-sm font-medium text-foreground/70">{selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number || 'PENDING VERIFICATION'}</p>
+                    <p className="text-sm font-medium text-foreground/70">{typeof (selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number) === 'object' ? JSON.stringify(selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number) : (selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number || 'PENDING VERIFICATION')}</p>
                   </div>
                 </div>
 
                 <div className="space-y-6">
                   <div>
                     <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Location of Incident</p>
-                    <p className="text-xl font-bold tracking-tight uppercase">{selectedFir.incident_location || selectedFir.location || 'UNDEFINED'}</p>
+                    <p className="text-xl font-bold tracking-tight uppercase">{typeof (selectedFir.incident_location || selectedFir.location) === 'object' ? JSON.stringify(selectedFir.incident_location || selectedFir.location) : (selectedFir.incident_location || selectedFir.location || 'UNDEFINED')}</p>
                   </div>
                   <div>
                     <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Occurrence Date</p>
@@ -357,7 +357,7 @@ export default function Dashboard() {
                 </div>
                 <div className="bg-background/30 p-6 border border-border/40 rounded-sm">
                   <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap italic">
-                    "{selectedFir.incident_description || selectedFir.ai_narrative || 'No statement provided.'}"
+                    "{typeof (selectedFir.incident_description || selectedFir.ai_narrative) === 'object' ? JSON.stringify(selectedFir.incident_description || selectedFir.ai_narrative) : (selectedFir.incident_description || selectedFir.ai_narrative || 'No statement provided.')}"
                   </p>
                 </div>
               </div>
@@ -368,7 +368,7 @@ export default function Dashboard() {
                   <div className="flex flex-wrap gap-2">
                     {selectedFir.sections?.map((section, idx) => (
                       <span key={idx} className="label-mono text-[9px] bg-accent/5 border border-accent/20 text-accent px-3 py-1 uppercase">
-                        {section}
+                        {typeof section === 'object' ? (section.section || section.type || JSON.stringify(section)) : section}
                       </span>
                     ))}
                   </div>

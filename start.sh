@@ -84,7 +84,16 @@ done
 # ── Spawning Services ─────────────────────────────────────────────────────────
 mkdir -p logs
 
-# 1. Launch FastAPI Backend
+# 1. Initialize DB schema & seed demo data
+info "Initializing database schema..."
+cd backend
+./venv/bin/python init_db.py >> ../logs/backend.log 2>&1 && success "DB schema ready." || warn "DB init failed (may already be initialized)."
+
+info "Seeding demo officer..."
+./venv/bin/python seed_demo.py >> ../logs/backend.log 2>&1 && success "Demo officer seeded." || warn "Demo seed failed (may already exist)."
+cd ..
+
+# 2. Launch FastAPI Backend
 info "Launching FastAPI backend API server..."
 cd backend
 ./venv/bin/python -m uvicorn app.server:app \

@@ -125,8 +125,8 @@ class DashboardService:
                 {
                     "id": str(log.id),
                     "officer_id": str(log.officer_id),
-                    "action": log.action.value if log.action else None,
-                    "resource_type": log.resource_type.value if log.resource_type else None,
+                    "action": getattr(log.action, "value", log.action) if log.action else None,
+                    "resource_type": getattr(log.resource_type, "value", log.resource_type) if log.resource_type else None,
                     "resource_id": str(log.resource_id) if log.resource_id else None,
                     "ip_address": log.ip_address,
                     "created_at": log.created_at.isoformat() if log.created_at else None,

@@ -25,7 +25,7 @@ const InputField = ({ label, placeholder, type = "text", multiline = false, full
   <div className={`flex flex-col gap-4 ${fullWidth ? 'md:col-span-2' : ''}`}>
     <label className="label-mono text-[8px] text-muted-foreground">{label}</label>
     {multiline ? (
-      <textarea 
+      <textarea
         rows={3}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
@@ -34,7 +34,7 @@ const InputField = ({ label, placeholder, type = "text", multiline = false, full
         placeholder={placeholder}
       />
     ) : (
-      <input 
+      <input
         type={type}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
@@ -55,7 +55,7 @@ const StatusBadge = ({ status }) => {
   };
   return (
     <span className={`label-mono text-[10px] border px-2 py-0.5 uppercase ${styles[status] || styles.draft}`}>
-      {status || 'draft'}
+      {typeof status === 'object' ? JSON.stringify(status) : (status || 'draft')}
     </span>
   );
 };
@@ -84,12 +84,12 @@ export default function FIRAutomator() {
   const [isTranslating, setIsTranslating] = useState(false);
   const [liveSections, setLiveSections] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  
+
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
   const nlpTimerRef = useRef(null);
-  
+
   const [formData, setFormData] = useState({
     complainant_name: '', complainant_contact: '', complainant_address: '',
     complainant_id: '', complainant_id_type: '', incident_location: '', incident_time: ''
@@ -150,7 +150,7 @@ export default function FIRAutomator() {
   // Format ID if type changes
   useEffect(() => {
     if (!formData.complainant_id) return;
-    
+
     if (formData.complainant_id_type === 'Aadhaar Card') {
       const digits = formData.complainant_id.replace(/\D/g, '').slice(0, 12);
       const groups = digits.match(/.{1,4}/g);
@@ -284,10 +284,10 @@ export default function FIRAutomator() {
         const entities = draft.extracted_entities || {};
         const complainant = draft.suggested_complainant || {};
         const firstLocation = Array.isArray(entities.locations) ? entities.locations[0] : '';
-        
+
         setDraftNarrative(draft.ai_narrative || '');
         setRecommendedSections(draft.recommended_sections || []);
-        
+
         setFormData((current) => ({
           ...current,
           complainant_name: complainant.name || current.complainant_name,
@@ -298,7 +298,7 @@ export default function FIRAutomator() {
         }));
         toast.success('FIR DRAFT GENERATED SUCCESSFULLY');
       }
-    } catch (err) { 
+    } catch (err) {
       console.error("AI Generation Failed", err);
       let errMsg;
       const data = err.response?.data;
@@ -326,14 +326,14 @@ export default function FIRAutomator() {
       }
       setGenerationError(errMsg);
       toast.error('AI GENERATION FAILED');
-    } finally { 
-      setIsGenerating(false); 
+    } finally {
+      setIsGenerating(false);
     }
   };
 
   const handleExportToWord = () => {
     if (!draftNarrative) return;
-    
+
     const currentCounter = parseInt(localStorage.getItem('crimegpt_fir_counter') || '0', 10);
     const previewFirNumber = `FIR-${String(currentCounter + 1).padStart(5, '0')}`;
 
@@ -351,126 +351,112 @@ export default function FIRAutomator() {
         <![endif]-->
         <style>
           body {
-            font-family: Arial, sans-serif;
-            font-size: 11pt;
-            line-height: 1.4;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12pt;
+            line-height: 1.5;
           }
-          .header {
+          h3 {
             text-align: center;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
+            font-size: 14pt;
+            font-weight: bold;
+            margin-bottom: 5px;
+          }
+          .sub-header {
+            text-align: center;
+            font-size: 12pt;
             margin-bottom: 20px;
           }
-          .title {
-            font-size: 18pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin: 0;
-          }
-          .subtitle {
-            font-size: 10pt;
-            color: #555;
-            margin: 5px 0 0 0;
-            font-style: italic;
-          }
-          .section-title {
-            font-size: 12pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            background-color: #f2f2f2;
-            padding: 5px;
-            margin-top: 20px;
+          .row {
             margin-bottom: 10px;
-            border-left: 3px solid #000;
           }
-          .grid {
-            width: 100%;
-            margin-bottom: 15px;
+          .underline {
+            text-decoration: underline;
           }
-          .grid td {
-            padding: 4px 0;
-            vertical-align: top;
+          ul {
+            list-style-type: none;
+            padding-left: 20px;
+            margin: 5px 0;
           }
-          .label {
-            font-weight: bold;
-            width: 150px;
+          li {
+            margin-bottom: 5px;
           }
-          .value {
-            color: #333;
+          .indent {
+            margin-left: 20px;
           }
           .narrative {
             white-space: pre-wrap;
-            background-color: #fafafa;
-            border: 1px solid #ddd;
-            padding: 12px;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 10pt;
-            line-height: 1.5;
-          }
-          .section-badge {
-            display: inline-block;
-            background-color: #eaeaea;
-            border: 1px solid #ccc;
-            padding: 2px 6px;
-            margin: 2px;
-            font-size: 9pt;
-            font-family: monospace;
+            margin-top: 10px;
+            font-family: 'Times New Roman', Times, serif;
           }
         </style>
       </head>
       <body>
-        <div class="header">
-          <div class="title">First Information Report (FIR)</div>
-          <div class="subtitle">Generated by CrimeGPT AI Legal Intelligence Platform</div>
+        <h3>FORM - IF1 - (Integrated Form) FIRST INFORMATION REPORT</h3>
+        <div class="sub-header">(Under Section 154 Cr.P.C)</div>
+        
+        <div class="row">
+          1. Dist. <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> 
+          P.S. <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> 
+          Year <u>${new Date().getFullYear()}</u> 
+          F.I.R. No. <u>${previewFirNumber}</u> 
+          Date <u>${new Date().toLocaleDateString()}</u>
         </div>
-
-        <table class="grid">
+        
+        <div class="row">2. (i)</div>
+        <table style="width: 95%; margin-left: 20px; border-collapse: collapse;">
           <tr>
-            <td class="label">FIR Reference:</td>
-            <td class="value"><strong>${previewFirNumber} (DRAFT)</strong></td>
+            <td style="width: 5%; vertical-align: top; padding: 4px 0;">(ii)</td>
+            <td style="width: 8%; vertical-align: top; padding: 4px 0;">*Act</td>
+            <td style="width: 27%; vertical-align: top; border-bottom: 1px solid black; padding: 4px 0;">BNS</td>
+            <td style="width: 12%; vertical-align: top; padding: 4px 0; padding-left: 10px;">*Sections</td>
+            <td style="width: 48%; vertical-align: top; border-bottom: 1px solid black; padding: 4px 0;">${recommendedSections.join(', ') || '&nbsp;'}</td>
           </tr>
           <tr>
-            <td class="label">Date & Time of Report:</td>
-            <td class="value">${new Date().toLocaleString()}</td>
-          </tr>
-          <tr>
-            <td class="label">Date & Time of Incident:</td>
-            <td class="value">${formData.incident_time ? new Date(formData.incident_time).toLocaleString() : 'Not Specified'}</td>
-          </tr>
-          <tr>
-            <td class="label">Location of Incident:</td>
-            <td class="value">${formData.incident_location || 'Pending Investigation'}</td>
+            <td style="vertical-align: top; padding: 4px 0;">(iii)</td>
+            <td style="vertical-align: top; padding: 4px 0;">*Act</td>
+            <td style="vertical-align: top; border-bottom: 1px solid black; padding: 4px 0;">&nbsp;</td>
+            <td style="vertical-align: top; padding: 4px 0; padding-left: 10px;">*Sections</td>
+            <td style="vertical-align: top; border-bottom: 1px solid black; padding: 4px 0;">&nbsp;</td>
           </tr>
         </table>
-
-        <div class="section-title">1. Complainant Details</div>
-        <table class="grid">
-          <tr>
-            <td class="label">Full Name:</td>
-            <td class="value">${formData.complainant_name || 'Unknown'}</td>
-          </tr>
-          <tr>
-            <td class="label">Contact Number:</td>
-            <td class="value">${formData.complainant_contact || 'Not Provided'}</td>
-          </tr>
-          <tr>
-            <td class="label">Residential Address:</td>
-            <td class="value">${formData.complainant_address || 'Not Provided'}</td>
-          </tr>
-          <tr>
-            <td class="label">Identity Document:</td>
-            <td class="value">${formData.complainant_id_type || 'None'} ${formData.complainant_id ? `(${formData.complainant_id})` : ''}</td>
-          </tr>
-        </table>
-
-        <div class="section-title">2. Legal Provisions (Recommended Sections)</div>
-        <div style="margin-bottom: 15px;">
-          ${recommendedSections.length > 0 
-            ? recommendedSections.map(s => `<div class="section-badge">${s}</div>`).join('') 
-            : '<span style="color: #666; font-style: italic;">No legal provisions recommended.</span>'}
+        <div style="margin-left: 20px; margin-top: 10px; margin-bottom: 10px;">
+          (iv) *Other Acts &amp; Sections <span style="display: inline-block; width: 300px; border-bottom: 1px solid black;">&nbsp;</span>
         </div>
+        
+        <div class="row">3.</div>
+        <ul>
+          <li>(a) *Occurrence of Offence: * Day <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> *Date <u>${formData.incident_time ? new Date(formData.incident_time).toLocaleDateString() : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</u> *Time <u>${formData.incident_time ? new Date(formData.incident_time).toLocaleTimeString() : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</u></li>
+          <li>(b) Information received at P.S. Date <u>${new Date().toLocaleDateString()}</u> Time <u>${new Date().toLocaleTimeString()}</u></li>
+          <li>(c) General Diary Reference: Entry No(s) <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> Time <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></li>
+        </ul>
 
-        <div class="section-title">3. AI Synthesized Case Narrative & Statement</div>
+        <div class="row">4. Type of information : *Written / Oral</div>
+        
+        <div class="row">5. Place of occurrence: </div>
+        <ul>
+          <li>(a) Direction and Distance from P.S. <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> Beat No. <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></li>
+          <li>(b) * Address <u>${formData.incident_location || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</u></li>
+          <li>(c) In case outside limit of this Police Station, then the name of P.S. <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> District <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></li>
+        </ul>
+
+        <div class="row">6. Complainant / information :</div>
+        <ul>
+          <li>(a) Name <u>${formData.complainant_name || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</u></li>
+          <li>(b) Father's / Husband's Name <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></li>
+          <li>(c) Date / Year of Birth <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></li>
+          <li>(d) Nationality <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></li>
+          <li>(e) Passport No: <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> Date of Issue: <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> Place of Issue <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></li>
+          <li>(f) Occupation: <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></li>
+          <li>(g) Address: <u>${formData.complainant_address || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</u></li>
+        </ul>
+
+        <div class="row">7. Details of known / suspected / unknown / accused with full particulars</div>
+        <div class="indent"><u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></div>
+
+        <div class="row" style="margin-top: 10px;">8. Reasons for delay in reporting by the complainant / Informant</div>
+        <div class="indent"><u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></div>
+
+        <div class="row" style="margin-top: 15px; font-weight: bold;">AI Synthesized Case Narrative & Statement:</div>
         <div class="narrative">${draftNarrative.replace(/\n/g, '<br />')}</div>
 
         <div style="margin-top: 40px; font-size: 8pt; color: #888; text-align: center; border-top: 1px solid #eee; padding-top: 10px;">
@@ -524,18 +510,27 @@ export default function FIRAutomator() {
       });
       toast.success(`FIR ${localFir.fir_number} SAVED TO VAULT`);
 
-      /* 
-      // Best-effort backend sync — Disabled to prevent unintentional record creation
+      // Backend sync to populate database and make dashboard stats functional
       firService.submit({
         fir_number: localFir.fir_number,
         incident_description: narrative,
         incident_date: formData.incident_time ? new Date(formData.incident_time).toISOString() : new Date().toISOString(),
         incident_location: localFir.incident_location,
-        complainant: { name: formData.complainant_name || 'Unknown', contact: formData.complainant_contact || '', address: formData.complainant_address || '', id_number: formData.complainant_id || '' },
-        sections: [],
-        ai_narrative: narrative
-      }).catch(() => {});
-      */
+        complainant: { 
+          name: formData.complainant_name || 'Unknown', 
+          contact: formData.complainant_contact || '', 
+          address: formData.complainant_address || '', 
+          id_number: formData.complainant_id || '' 
+        },
+        sections: recommendedSections || [],
+        ai_narrative: draftNarrative || narrative
+      }).then((res) => {
+          if (res.success) {
+            console.log("FIR synced to backend successfully");
+          }
+      }).catch((err) => {
+          console.error("Failed to sync FIR to backend", err);
+      });
 
     } catch (err) {
       console.error('Failed to save FIR', err);
@@ -579,23 +574,21 @@ export default function FIRAutomator() {
         <div className="flex flex-col items-start gap-4">
           {/* Language toggle */}
           <div className="flex gap-1">
-            {[{code:'en',label:'EN'},{code:'hi',label:'हि'},{code:'gu',label:'ગુ'}].map(l => (
+            {[{ code: 'en', label: 'EN' }, { code: 'hi', label: 'हि' }, { code: 'gu', label: 'ગુ' }].map(l => (
               <button
                 key={l.code}
                 onClick={() => setInputLang(l.code)}
-                className={`px-3 py-1.5 label-mono text-[9px] font-bold border transition-all ${
-                  inputLang === l.code
+                className={`px-3 py-1.5 label-mono text-[9px] font-bold border transition-all ${inputLang === l.code
                     ? 'bg-accent text-background border-accent'
                     : 'border-border text-muted-foreground hover:border-foreground/30'
-                }`}
+                  }`}
               >{l.label}</button>
             ))}
           </div>
-          <button 
+          <button
             onClick={handleVoiceInput} disabled={isTranscribing}
-            className={`flex items-center gap-2 px-6 py-3 font-bold text-base uppercase tracking-tighter transition-all border-2 ${
-              isRecording ? 'bg-accent border-accent text-background animate-pulse' : 'bg-background border-foreground/50 text-foreground/80 hover:bg-foreground hover:text-background'
-            }`}
+            className={`flex items-center gap-2 px-6 py-3 font-bold text-base uppercase tracking-tighter transition-all border-2 ${isRecording ? 'bg-accent border-accent text-background animate-pulse' : 'bg-background border-foreground/50 text-foreground/80 hover:bg-foreground hover:text-background'
+              }`}
           >
             <Mic size={18} />
             {isTranscribing ? 'Transcribing...' : isRecording ? 'Stop Recording' : `Voice (${inputLang.toUpperCase()})`}
@@ -622,7 +615,7 @@ export default function FIRAutomator() {
             </button>
           )}
         </div>
-        <textarea 
+        <textarea
           value={narrative} onChange={(e) => setNarrative(e.target.value)}
           className="w-full bg-transparent border border-foreground/10 rounded-md p-3 text-lg md:text-xl font-medium tracking-tight placeholder:text-muted-foreground/10 focus:outline-none focus:border-foreground/30 min-h-[120px] leading-relaxed text-foreground/70"
           placeholder={inputLang === 'hi' ? 'घटना का विवरण यहाँ लिखें...' : inputLang === 'gu' ? 'ઘટનાનું વર્ણન અહીં લખો...' : 'Describe the incident in detail. AI will auto-fill structured fields below.'}
@@ -669,20 +662,18 @@ export default function FIRAutomator() {
             placeholder="+91 XXXX-XXXXXX"
             value={formData.complainant_contact}
             onChange={(v) => updateField('complainant_contact', v || '')}
-            className={`bg-muted/50 border-none p-3.5 text-sm font-normal tracking-tight focus:outline-none focus:ring-1 transition-all text-foreground/80 [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:focus:outline-none [&_.PhoneInputInput]:min-h-[24px] ${
-              formData.complainant_contact
+            className={`bg-muted/50 border-none p-3.5 text-sm font-normal tracking-tight focus:outline-none focus:ring-1 transition-all text-foreground/80 [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:focus:outline-none [&_.PhoneInputInput]:min-h-[24px] ${formData.complainant_contact
                 ? isValidPhoneNumber(formData.complainant_contact)
                   ? 'focus:ring-green-500/40'
                   : 'focus:ring-red-500/40'
                 : 'focus:ring-accent/40'
-            }`}
+              }`}
           />
           {formData.complainant_contact && (
-            <p className={`label-mono text-[8px] mt-1 ${
-              isValidPhoneNumber(formData.complainant_contact)
+            <p className={`label-mono text-[8px] mt-1 ${isValidPhoneNumber(formData.complainant_contact)
                 ? 'text-green-500'
                 : 'text-red-400'
-            }`}>
+              }`}>
               {isValidPhoneNumber(formData.complainant_contact)
                 ? '✓ Valid number'
                 : '✗ Invalid number for selected country'}
@@ -707,30 +698,29 @@ export default function FIRAutomator() {
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <InputField 
-            label="ID Number" 
+          <InputField
+            label="ID Number"
             placeholder={
-              formData.complainant_id_type === 'Aadhaar Card' ? "0000 0000 0000" : 
-              formData.complainant_id_type === 'PAN Card' ? "ABCDE1234F" : 
-              formData.complainant_id_type === 'Voter ID' ? "XYZ1234567" :
-              formData.complainant_id_type === 'Passport' ? "Z1234567" :
-              formData.complainant_id_type === 'Driving Licence' ? "DL-1420110012345" :
-              "ENTER ID NUMBER"
-            } 
-            value={formData.complainant_id} 
-            onChange={(v) => updateField('complainant_id', v)} 
+              formData.complainant_id_type === 'Aadhaar Card' ? "0000 0000 0000" :
+                formData.complainant_id_type === 'PAN Card' ? "ABCDE1234F" :
+                  formData.complainant_id_type === 'Voter ID' ? "XYZ1234567" :
+                    formData.complainant_id_type === 'Passport' ? "Z1234567" :
+                      formData.complainant_id_type === 'Driving Licence' ? "DL-1420110012345" :
+                        "ENTER ID NUMBER"
+            }
+            value={formData.complainant_id}
+            onChange={(v) => updateField('complainant_id', v)}
             maxLength={
-              formData.complainant_id_type === 'Aadhaar Card' ? 14 : 
-              formData.complainant_id_type === 'PAN Card' ? 10 : 
-              formData.complainant_id_type === 'Voter ID' ? 10 :
-              formData.complainant_id_type === 'Passport' ? 8 :
-              formData.complainant_id_type === 'Driving Licence' ? 15 :
-              undefined
+              formData.complainant_id_type === 'Aadhaar Card' ? 14 :
+                formData.complainant_id_type === 'PAN Card' ? 10 :
+                  formData.complainant_id_type === 'Voter ID' ? 10 :
+                    formData.complainant_id_type === 'Passport' ? 8 :
+                      formData.complainant_id_type === 'Driving Licence' ? 15 :
+                        undefined
             }
           />
           {formData.complainant_id && formData.complainant_id_type && (
-            <p className={`label-mono text-[8px] mt-1 ${
-              (() => {
+            <p className={`label-mono text-[8px] mt-1 ${(() => {
                 const type = formData.complainant_id_type;
                 const val = formData.complainant_id;
                 if (type === 'Aadhaar Card') return val.replace(/\D/g, '').length === 12;
@@ -740,7 +730,7 @@ export default function FIRAutomator() {
                 if (type === 'Driving Licence') return val.length === 15;
                 return true;
               })() ? 'text-green-500' : 'text-red-400'
-            }`}>
+              }`}>
               {(() => {
                 const type = formData.complainant_id_type;
                 const val = formData.complainant_id;
@@ -813,14 +803,14 @@ export default function FIRAutomator() {
           BY GENERATING THIS DOCUMENT, YOU ACKNOWLEDGE THAT ALL INPUTS ARE VERIFIED PER POLICE PROTOCOL.
         </p>
         <div className="flex gap-8">
-          <button 
-            onClick={handleSave} 
+          <button
+            onClick={handleSave}
             disabled={isSaving || !narrative}
             className="label-mono text-base border-b-2 border-border/50 pb-1 hover:border-accent transition-all text-muted-foreground disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save FIR'}
           </button>
-          <button 
+          <button
             onClick={handleGenerate} disabled={isGenerating || isRecording || isTranscribing || !narrative.trim()}
             className="flex items-center gap-3 px-8 py-4 bg-accent text-background font-bold text-lg uppercase tracking-tighter hover:bg-foreground transition-all disabled:opacity-50"
           >
@@ -849,7 +839,7 @@ export default function FIRAutomator() {
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <p className="label-mono text-[9px] text-accent/70 mb-1">FIR Record</p>
-                  <h2 className="text-3xl font-bold tracking-tighter uppercase">{selectedFir.fir_number || selectedFir.fir_no || 'UNKNOWN'}</h2>
+                  <h2 className="text-3xl font-bold tracking-tighter uppercase">{typeof (selectedFir.fir_number || selectedFir.fir_no) === 'object' ? JSON.stringify(selectedFir.fir_number || selectedFir.fir_no) : (selectedFir.fir_number || selectedFir.fir_no || 'UNKNOWN')}</h2>
                 </div>
                 <button onClick={() => setSelectedFir(null)} className="text-muted-foreground hover:text-foreground transition-colors">
                   <X size={20} />
@@ -863,24 +853,24 @@ export default function FIRAutomator() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Complainant</p>
-                    <p className="text-sm font-medium">{selectedFir.complainant?.name || '—'}</p>
+                    <p className="text-sm font-medium">{typeof selectedFir.complainant?.name === 'object' ? JSON.stringify(selectedFir.complainant?.name) : (selectedFir.complainant?.name || '—')}</p>
                   </div>
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Contact</p>
-                    <p className="text-sm font-medium">{selectedFir.complainant?.contact || selectedFir.complainant?.phone || '—'}</p>
+                    <p className="text-sm font-medium">{typeof (selectedFir.complainant?.contact || selectedFir.complainant?.phone) === 'object' ? JSON.stringify(selectedFir.complainant?.contact || selectedFir.complainant?.phone) : (selectedFir.complainant?.contact || selectedFir.complainant?.phone || '—')}</p>
                   </div>
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Address</p>
-                    <p className="text-sm font-medium">{selectedFir.complainant?.address || '—'}</p>
+                    <p className="text-sm font-medium">{typeof selectedFir.complainant?.address === 'object' ? JSON.stringify(selectedFir.complainant?.address) : (selectedFir.complainant?.address || '—')}</p>
                   </div>
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Identity Proof</p>
-                    <p className="text-sm font-medium">{selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number || '—'}</p>
+                    <p className="text-sm font-medium">{typeof (selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number) === 'object' ? JSON.stringify(selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number) : (selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number || '—')}</p>
                   </div>
                 </div>
                 <div>
                   <p className="label-mono text-[8px] text-muted-foreground mb-1">Location</p>
-                  <p className="text-sm font-medium">{selectedFir.incident_location || selectedFir.location || '—'}</p>
+                  <p className="text-sm font-medium">{typeof (selectedFir.incident_location || selectedFir.location) === 'object' ? JSON.stringify(selectedFir.incident_location || selectedFir.location) : (selectedFir.incident_location || selectedFir.location || '—')}</p>
                 </div>
                 <div>
                   <p className="label-mono text-[8px] text-muted-foreground mb-1">Filed</p>
@@ -890,19 +880,19 @@ export default function FIRAutomator() {
                   <p className="label-mono text-[8px] text-muted-foreground mb-2">Incident Narrative</p>
                   <div className="bg-background/30 p-4 border border-border/40 rounded-sm">
                     <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap italic">
-                      "{selectedFir?.incident_description || selectedFir?.ai_narrative || 'No statement recorded.'}"
+                      "{typeof (selectedFir?.incident_description || selectedFir?.ai_narrative) === 'object' ? JSON.stringify(selectedFir?.incident_description || selectedFir?.ai_narrative) : (selectedFir?.incident_description || selectedFir?.ai_narrative || 'No statement recorded.')}"
                     </p>
                   </div>
                 </div>
               </div>
-              
+
               {selectedFir?.sections?.length > 0 && (
                 <div className="mt-6">
                   <p className="label-mono text-[8px] text-muted-foreground mb-2 uppercase">Applied Sections</p>
                   <div className="flex flex-wrap gap-2">
                     {selectedFir.sections.map((s, i) => (
                       <span key={i} className="label-mono text-[9px] bg-accent/5 border border-accent/20 text-accent px-2 py-1 uppercase">
-                        {s}
+                        {typeof s === 'object' ? (s.section || s.type || JSON.stringify(s)) : s}
                       </span>
                     ))}
                   </div>
@@ -927,7 +917,7 @@ export default function FIRAutomator() {
           <h2 className="text-4xl font-bold tracking-tighter uppercase text-foreground/80">Your FIRs</h2>
           <div className="flex items-center gap-6">
             {localFirs.length > 0 && (
-              <button 
+              <button
                 onClick={() => {
                   if (window.confirm('Are you sure you want to clear all local drafts?')) {
                     localStorage.removeItem('crimegpt_local_firs');
@@ -951,13 +941,13 @@ export default function FIRAutomator() {
             </div>
           ) : (
             localFirs.map((fir, i) => (
-              <motion.div key={fir.id} initial={{opacity:0}} animate={{opacity:1}} transition={{delay:i*0.04}}
+              <motion.div key={fir.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
                 className="group flex items-center justify-between py-6 border-b border-border hover:bg-muted transition-all px-4 -mx-4"
               >
                 <div className="flex items-baseline gap-6 cursor-pointer flex-1" onClick={() => setSelectedFir(fir)}>
-                  <span className="label-mono opacity-30 group-hover:opacity-100 group-hover:text-accent">{String(i+1).padStart(2,'0')}</span>
+                  <span className="label-mono opacity-30 group-hover:opacity-100 group-hover:text-accent">{String(i + 1).padStart(2, '0')}</span>
                   <div>
-                    <p className="text-base font-bold uppercase tracking-tight">{fir.fir_number || `FIR-${fir.id.slice(0,8)}`}</p>
+                    <p className="text-base font-bold uppercase tracking-tight">{fir.fir_number || `FIR-${fir.id.slice(0, 8)}`}</p>
                     <p className="label-mono mt-0.5 text-muted-foreground text-[8px]">{formatTimeAgo(fir.created_at)}</p>
                   </div>
                 </div>
