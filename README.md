@@ -157,7 +157,7 @@ npm run dev -- --host
 
 ### 📋 FIR Automator
 - Natural language incident input → structured FIR draft
-- **Sequential FIR numbering**: `FIR-00001`, `FIR-00002`, ...
+- **Sequential FIR numbering**: `FIR-00001`, `FIR-00002`, .....
 - Persistent local storage — works even if backend is offline
 - Click any FIR to view full details (complainant, location, narrative)
 - Inline delete with confirmation
