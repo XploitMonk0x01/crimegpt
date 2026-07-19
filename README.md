@@ -303,13 +303,15 @@ REDIS_URL=redis://localhost:6379
 # AI
 GROQ_API_KEY=your_groq_api_key_here
 
-# RAG ingestion (optional)
-RAG_ALLOWED_DOMAINS=indiacode.nic.in,legislative.gov.in
-RAG_STRIP_PROMPT_INJECTION=true
-RAG_REDACT_PII=false
-
-# Auth
-JWT_SECRET=your_jwt_secret
+# Multi-model routing
+# FIR drafting & legal Q&A (primary)
+GROQ_MODEL_PRIMARY=llama-3.3-70b-versatile
+# NER, classification (fast)
+GROQ_MODEL_FAST=llama-3.1-8b-instant
+# Complex legal reasoning (fallback)
+GROQ_MODEL_FALLBACK=qwen/qwen3.6-27b
+# Speech-to-text
+GROQ_MODEL_WHISPER=whisper-large-v3-turbo
 ```
 
 > [!IMPORTANT]

@@ -130,34 +130,34 @@ echo -e "  ${YELLOW}💡 Press Ctrl+C in this terminal at any time to suspend se
 divider
 echo ""
 
-# ── SIGINT / SIGTERM Process Lifecycle Cleaner ─────────────────────────────────
+# ── SIGINT / SIGTERM / SIGHUP / EXIT Process Lifecycle Cleaner ─────────────────
 cleanup() {
+  # Disable trap to prevent recursive/double invocation
+  trap - INT TERM HUP EXIT
   echo ""
   warn "Received termination signal. Shutting down system services..."
   
-  info "Stopping backend server (PID: $BACKEND_PID)..."
-  kill "$BACKEND_PID" 2>/dev/null || true
+  if [ -n "${BACKEND_PID:-}" ]; then
+    info "Stopping backend server (PID: $BACKEND_PID)..."
+    kill "$BACKEND_PID" 2>/dev/null || true
+  fi
   
-  info "Stopping frontend server (PID: $FRONTEND_PID)..."
-  kill "$FRONTEND_PID" 2>/dev/null || true
+  if [ -n "${FRONTEND_PID:-}" ]; then
+    info "Stopping frontend server (PID: $FRONTEND_PID)..."
+    kill "$FRONTEND_PID" 2>/dev/null || true
+  fi
   
   success "Web servers successfully suspended."
 
-  echo ""
-  read -rp "  Would you also like to shut down the PostgreSQL and Redis containers? [y/N]: " STOP_CONTAINERS
-  if [[ "$STOP_CONTAINERS" =~ ^[Yy]$ ]]; then
-    info "Running: $COMPOSE_CMD down"
-    $COMPOSE_CMD down
-    success "Docker databases brought down."
-  else
-    info "Docker databases kept running in background."
-  fi
+  info "Stopping Docker databases ($COMPOSE_CMD down)..."
+  $COMPOSE_CMD down
+  success "Docker databases brought down."
 
   echo -e "\n${BOLD}${GREEN}👋 Goodbye!${NC}"
   exit 0
 }
 
-trap cleanup INT TERM
+trap cleanup INT TERM HUP EXIT
 
 # Wait on background subprocesses
 wait "$BACKEND_PID" "$FRONTEND_PID"

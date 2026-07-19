@@ -221,7 +221,27 @@ class RAGService:
                     similarity = round(max(0.0, 1.0 - float(dist)), 4)
                     chunks.append({"text": doc, "metadata": meta or {}, "similarity": similarity})
 
-            result = self._apply_rerank(chunks, query_text, n_results=n_results,
+            # Retrieve lexical search candidates from local corpus to guarantee keyword overlap (e.g. section numbers)
+            local_chunks = self._query_local_corpus(
+                query_text,
+                n_results=fetch_n,
+                where=where,
+                min_similarity=min_similarity * 0.5,
+            )
+
+            # Deduplicate and merge vector and local fallback search results
+            seen_texts = set()
+            merged_chunks = []
+            for c in chunks:
+                if c["text"] not in seen_texts:
+                    seen_texts.add(c["text"])
+                    merged_chunks.append(c)
+            for c in local_chunks:
+                if c["text"] not in seen_texts:
+                    seen_texts.add(c["text"])
+                    merged_chunks.append(c)
+
+            result = self._apply_rerank(merged_chunks, query_text, n_results=n_results,
                                          min_similarity=min_similarity, rerank=rerank)
             if use_cache and result:
                 await RAGCache().set_chunks(query_text, act_filter, result)
@@ -453,12 +473,14 @@ class RAGService:
                 "source_type": "url",
                 "url": url,
                 "act": item.act or "unknown",
-                "tags": item.tags,
+                "tags": ",".join(item.tags) if item.tags else "",
                 "content_hash": content_hash,
                 "ingested_at": now,
                 "chunk_index": i,
                 "prompt_injection": signals.prompt_injection,
-                "pii_matches": signals.pii_matches,
+                "pii_email": signals.pii_matches.get("email", 0),
+                "pii_phone": signals.pii_matches.get("phone", 0),
+                "pii_aadhaar": signals.pii_matches.get("aadhaar", 0),
                 "prompt_injection_stripped": stripped_lines,
             }
             for i in range(len(chunks))
