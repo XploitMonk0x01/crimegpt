@@ -201,7 +201,9 @@ function FIRDetailModal({ fir, onClose, role, onApprove, onReject }) {
           <h2 className="text-5xl font-bold tracking-tighter uppercase leading-none truncate">{fir.fir_number}</h2>
           <div className="mt-4 flex items-center gap-4">
             <StatusBadge status={fir.status} />
-            <span className="label-mono text-[9px] text-muted-foreground/40 italic">ID: {fir.id}</span>
+            {fir.id && !fir.id.startsWith('local-') && (
+              <span className="label-mono text-[9px] text-muted-foreground/40 italic">ID: {fir.id}</span>
+            )}
           </div>
         </div>
 
@@ -213,7 +215,11 @@ function FIRDetailModal({ fir, onClose, role, onApprove, onReject }) {
             </div>
             <div>
               <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Contact Details</p>
-              <p className="text-base font-medium text-foreground/80">{safeStr(fir.complainant?.contact || fir.complainant?.phone)}</p>
+              <p className="text-base font-medium text-foreground/80">{safeStr(fir.complainant?.contact || fir.complainant?.phone) || '—'}</p>
+            </div>
+            <div>
+              <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Address</p>
+              <p className="text-sm font-medium text-foreground/70">{safeStr(fir.complainant?.address) || '—'}</p>
             </div>
             <div>
               <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Identity Proof</p>
@@ -223,7 +229,18 @@ function FIRDetailModal({ fir, onClose, role, onApprove, onReject }) {
           <div className="space-y-6">
             <div>
               <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Location of Incident</p>
-              <p className="text-xl font-bold tracking-tight uppercase">{safeStr(fir.incident_location || fir.location) || 'UNDEFINED'}</p>
+              <p className="text-xl font-bold tracking-tight uppercase">
+                {(() => {
+                  const loc = fir.incident_location || fir.location;
+                  if (!loc) return 'UNDEFINED';
+                  if (typeof loc === 'object') {
+                    return loc.name
+                      ? `${loc.name}${loc.description ? ' — ' + loc.description : ''}`
+                      : JSON.stringify(loc);
+                  }
+                  return loc;
+                })()}
+              </p>
             </div>
             <div>
               <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Occurrence Date</p>
@@ -401,6 +418,13 @@ export default function Dashboard() {
   const pendingApprovals = data?.pending_approvals || [];
   const pendingCount = pendingApprovals.length || stats.submitted || 0;
 
+  // Merge local submitted FIRs into the dashboard list so they appear immediately
+  const localSubmitted = localFirs.filter(f => f.status === 'submitted');
+  const mergedRecentFirs = [
+    ...localSubmitted,
+    ...recentFirs.filter(rf => !localSubmitted.some(lf => lf.fir_number === rf.fir_number))
+  ];
+
   // Role label for hero
   const ROLE_LABEL = { admin: 'Admin Officer', sho: 'SHO Officer', io: 'IO Officer' };
   const ROLE_COLOR = { admin: 'text-red-400', sho: 'text-yellow-400', io: 'text-blue-400' };
@@ -547,13 +571,13 @@ export default function Dashboard() {
                     <div className="w-16 h-5 bg-muted animate-pulse" />
                   </div>
                 ))
-              ) : recentFirs.length === 0 ? (
+              ) : mergedRecentFirs.length === 0 ? (
                 <div className="py-16 text-center">
                   <FileText size={48} strokeWidth={1} className="text-muted-foreground/20 mx-auto mb-4" />
                   <p className="label-mono text-muted-foreground/40 text-[10px]">No FIRs recorded yet</p>
                 </div>
               ) : (
-                recentFirs.map((fir, i) => (
+                mergedRecentFirs.map((fir, i) => (
                   <motion.div
                     key={fir.id}
                     initial={{ opacity: 0, x: -10 }}
@@ -568,7 +592,9 @@ export default function Dashboard() {
                       </span>
                       <div>
                         <p className="text-lg font-bold uppercase tracking-tight">{fir.fir_number || `FIR-${fir.id.slice(0, 8)}`}</p>
-                        <p className="label-mono mt-0.5 text-muted-foreground text-[9px]">{formatTimeAgo(fir.created_at)}</p>
+                        <p className="label-mono mt-0.5 text-muted-foreground text-[9px]">
+                          {fir.complainant?.name ? `${fir.complainant.name} · ` : ''}{formatTimeAgo(fir.created_at)}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">

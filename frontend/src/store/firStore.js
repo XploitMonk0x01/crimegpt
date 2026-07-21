@@ -36,6 +36,12 @@ const useFirStore = create((set, get) => ({
     set({ localFirs: updated });
   },
 
+  updateFir: (id, patch) => {
+    const updated = get().localFirs.map(f => f.id === id ? { ...f, ...patch } : f);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    set({ localFirs: updated });
+  },
+
   clearAll: () => {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.setItem(COUNTER_KEY, '0');

@@ -99,6 +99,7 @@ export default function FIRAutomator() {
   const localFirs = useFirStore(s => s.localFirs);
   const addFir = useFirStore(s => s.addFir);
   const deleteFir = useFirStore(s => s.deleteFir);
+  const updateFir = useFirStore(s => s.updateFir);
   const getNextFirNumber = useFirStore(s => s.getNextFirNumber);
   const clearAll = useFirStore(s => s.clearAll);
 
@@ -296,19 +297,17 @@ export default function FIRAutomator() {
           complainant_id: complainant.id_number || current.complainant_id,
           incident_location: firstLocation || current.incident_location,
         }));
-        toast.success('FIR DRAFT GENERATED SUCCESSFULLY');
+        toast.success('FIR DRAFT GENERATED — Review and submit below');
       }
     } catch (err) {
       console.error("AI Generation Failed", err);
       let errMsg;
       const data = err.response?.data;
       if (!err.response) {
-        // Network error — backend not reachable
         errMsg = "Cannot reach the server. Please ensure the backend is running.";
       } else if (err.response.status === 401) {
         errMsg = "Session expired. Please log in again.";
       } else if (err.response.status === 422) {
-        // FastAPI Pydantic validation error — detail is an array of objects
         const detail = data?.detail;
         if (Array.isArray(detail)) {
           errMsg = detail.map(d => d.msg || d.message).filter(Boolean).join('; ');
@@ -318,7 +317,6 @@ export default function FIRAutomator() {
           errMsg = "Validation error. Please check your input.";
         }
       } else {
-        // Other server errors
         errMsg = data?.message
           || data?.detail
           || data?.errors?.[0]?.message
@@ -329,6 +327,124 @@ export default function FIRAutomator() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // Submits FIR directly to the Command Dashboard (status: submitted)
+  const handleSubmitToDashboard = async () => {
+    if (!narrative.trim()) return;
+    setIsSaving(true);
+    try {
+      // If not yet generated, run generation first
+      let aiNarrative = draftNarrative;
+      let sections = recommendedSections;
+      let currentFormData = { ...formData };
+
+      if (!aiNarrative) {
+        setIsGenerating(true);
+        try {
+          const response = await firService.generate(narrative);
+          if (response.success) {
+            const draft = response.data || {};
+            const entities = draft.extracted_entities || {};
+            const complainant = draft.suggested_complainant || {};
+            const firstLocation = Array.isArray(entities.locations) ? entities.locations[0] : '';
+            aiNarrative = draft.ai_narrative || '';
+            sections = draft.recommended_sections || [];
+            currentFormData = {
+              ...currentFormData,
+              complainant_name: complainant.name || currentFormData.complainant_name,
+              complainant_contact: complainant.contact || currentFormData.complainant_contact,
+              complainant_address: complainant.address || currentFormData.complainant_address,
+              complainant_id: complainant.id_number || currentFormData.complainant_id,
+              incident_location: firstLocation || currentFormData.incident_location,
+            };
+            setDraftNarrative(aiNarrative);
+            setRecommendedSections(sections);
+            setFormData(currentFormData);
+          }
+        } finally {
+          setIsGenerating(false);
+        }
+      }
+
+      const firNumber = getNextFirNumber();
+      const localFir = {
+        id: `local-${Date.now()}`,
+        fir_number: firNumber,
+        status: 'submitted',
+        incident_location: currentFormData.incident_location || 'Pending Investigation',
+        incident_description: aiNarrative || narrative,
+        ai_narrative: aiNarrative || narrative,
+        sections: sections,
+        created_at: new Date().toISOString(),
+        complainant: {
+          name: currentFormData.complainant_name || 'Unknown',
+          contact: currentFormData.complainant_contact || '',
+          address: currentFormData.complainant_address || '',
+          id_type: currentFormData.complainant_id_type || '',
+          id_proof: currentFormData.complainant_id || '',
+        },
+      };
+
+      addFir(localFir);
+      setNarrative('');
+      setDraftNarrative('');
+      setRecommendedSections([]);
+      setFormData({
+        complainant_name: '', complainant_contact: '', complainant_address: '',
+        complainant_id: '', complainant_id_type: '', incident_location: '', incident_time: ''
+      });
+      toast.success(`✅ FIR ${firNumber} SUBMITTED TO COMMAND DASHBOARD`);
+
+      // Backend sync
+      firService.submit({
+        fir_number: firNumber,
+        incident_description: aiNarrative || narrative,
+        incident_date: currentFormData.incident_time ? new Date(currentFormData.incident_time).toISOString() : new Date().toISOString(),
+        incident_location: localFir.incident_location,
+        complainant: {
+          name: currentFormData.complainant_name || 'Unknown',
+          contact: currentFormData.complainant_contact || '',
+          address: currentFormData.complainant_address || '',
+          id_number: currentFormData.complainant_id || ''
+        },
+        sections: sections || [],
+        ai_narrative: aiNarrative || narrative
+      }).then((res) => {
+        if (res.success) console.log('FIR synced to backend');
+      }).catch((err) => {
+        console.error('Backend sync failed', err);
+      });
+
+    } catch (err) {
+      console.error('Failed to submit FIR', err);
+      toast.error('FAILED TO SUBMIT FIR');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Promote a draft FIR to the Command Dashboard
+  const handleAddToDashboard = async (fir) => {
+    updateFir(fir.id, { status: 'submitted' });
+    toast.success(`✅ FIR ${fir.fir_number} ADDED TO COMMAND DASHBOARD`);
+    setSelectedFir(null);
+
+    // Backend sync
+    firService.submit({
+      fir_number: fir.fir_number,
+      incident_description: fir.incident_description || '',
+      incident_date: fir.created_at,
+      incident_location: fir.incident_location || '',
+      complainant: {
+        name: fir.complainant?.name || 'Unknown',
+        contact: fir.complainant?.contact || '',
+        address: fir.complainant?.address || '',
+        id_number: fir.complainant?.id_proof || ''
+      },
+      sections: fir.sections || [],
+      ai_narrative: fir.ai_narrative || fir.incident_description || ''
+    }).catch((err) => console.error('Backend sync failed for dashboard add', err));
   };
 
   const handleExportToWord = () => {
@@ -800,21 +916,29 @@ export default function FIRAutomator() {
       {/* Actions */}
       <div className="py-16 border-t border-border flex flex-col md:flex-row justify-between items-center gap-12">
         <p className="label-mono max-w-sm text-muted-foreground/40 text-[9px]">
-          BY GENERATING THIS DOCUMENT, YOU ACKNOWLEDGE THAT ALL INPUTS ARE VERIFIED PER POLICE PROTOCOL.
+          GENERATING SENDS THE FIR DIRECTLY TO THE COMMAND DASHBOARD. SAVE AS DRAFT TO REVIEW FIRST.
         </p>
-        <div className="flex gap-8">
+        <div className="flex gap-8 flex-wrap justify-end">
           <button
             onClick={handleSave}
             disabled={isSaving || !narrative}
             className="label-mono text-base border-b-2 border-border/50 pb-1 hover:border-accent transition-all text-muted-foreground disabled:opacity-50"
           >
-            {isSaving ? 'Saving...' : 'Save FIR'}
+            {isSaving ? 'Saving...' : 'Save as Draft'}
           </button>
           <button
-            onClick={handleGenerate} disabled={isGenerating || isRecording || isTranscribing || !narrative.trim()}
+            onClick={handleGenerate}
+            disabled={isGenerating || isRecording || isTranscribing || !narrative.trim()}
+            className="label-mono text-sm border border-foreground/30 px-6 py-3 hover:border-foreground transition-all text-foreground/70 disabled:opacity-50 uppercase"
+          >
+            {isGenerating ? 'Analysing...' : 'Preview AI Draft'}
+          </button>
+          <button
+            onClick={handleSubmitToDashboard}
+            disabled={isSaving || isGenerating || isRecording || isTranscribing || !narrative.trim()}
             className="flex items-center gap-3 px-8 py-4 bg-accent text-background font-bold text-lg uppercase tracking-tighter hover:bg-foreground transition-all disabled:opacity-50"
           >
-            {isGenerating ? <><span>Analysing...</span><Loader2 size={20} className="animate-spin" /></> : <><span>Generate FIR</span><ArrowRight size={20} /></>}
+            {(isSaving || isGenerating) ? <><span>Processing...</span><Loader2 size={20} className="animate-spin" /></> : <><span>Generate FIR</span><ArrowRight size={20} /></>}
           </button>
         </div>
       </div>
@@ -853,24 +977,37 @@ export default function FIRAutomator() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Complainant</p>
-                    <p className="text-sm font-medium">{typeof selectedFir.complainant?.name === 'object' ? JSON.stringify(selectedFir.complainant?.name) : (selectedFir.complainant?.name || '—')}</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.name || '—'}</p>
                   </div>
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Contact</p>
-                    <p className="text-sm font-medium">{typeof (selectedFir.complainant?.contact || selectedFir.complainant?.phone) === 'object' ? JSON.stringify(selectedFir.complainant?.contact || selectedFir.complainant?.phone) : (selectedFir.complainant?.contact || selectedFir.complainant?.phone || '—')}</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.contact || selectedFir.complainant?.phone || '—'}</p>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Address</p>
-                    <p className="text-sm font-medium">{typeof selectedFir.complainant?.address === 'object' ? JSON.stringify(selectedFir.complainant?.address) : (selectedFir.complainant?.address || '—')}</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.address || '—'}</p>
                   </div>
                   <div>
                     <p className="label-mono text-[8px] text-muted-foreground mb-1">Identity Proof</p>
-                    <p className="text-sm font-medium">{typeof (selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number) === 'object' ? JSON.stringify(selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number) : (selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number || '—')}</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="label-mono text-[8px] text-muted-foreground mb-1">ID Type</p>
+                    <p className="text-sm font-medium">{selectedFir.complainant?.id_type || '—'}</p>
                   </div>
                 </div>
                 <div>
                   <p className="label-mono text-[8px] text-muted-foreground mb-1">Location</p>
-                  <p className="text-sm font-medium">{typeof (selectedFir.incident_location || selectedFir.location) === 'object' ? JSON.stringify(selectedFir.incident_location || selectedFir.location) : (selectedFir.incident_location || selectedFir.location || '—')}</p>
+                  <p className="text-sm font-medium">
+                    {(() => {
+                      const loc = selectedFir.incident_location || selectedFir.location;
+                      if (!loc) return '—';
+                      if (typeof loc === 'object') {
+                        return loc.name ? `${loc.name}${loc.description ? ' — ' + loc.description : ''}` : JSON.stringify(loc);
+                      }
+                      return loc;
+                    })()}
+                  </p>
                 </div>
                 <div>
                   <p className="label-mono text-[8px] text-muted-foreground mb-1">Filed</p>
@@ -880,7 +1017,7 @@ export default function FIRAutomator() {
                   <p className="label-mono text-[8px] text-muted-foreground mb-2">Incident Narrative</p>
                   <div className="bg-background/30 p-4 border border-border/40 rounded-sm">
                     <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap italic">
-                      "{typeof (selectedFir?.incident_description || selectedFir?.ai_narrative) === 'object' ? JSON.stringify(selectedFir?.incident_description || selectedFir?.ai_narrative) : (selectedFir?.incident_description || selectedFir?.ai_narrative || 'No statement recorded.')}"
+                      "{selectedFir?.incident_description || selectedFir?.ai_narrative || 'No statement recorded.'}"
                     </p>
                   </div>
                 </div>
@@ -898,13 +1035,21 @@ export default function FIRAutomator() {
                   </div>
                 </div>
               )}
-              <div className="mt-8 flex justify-end">
+              <div className="mt-8 flex items-center justify-between">
                 <button
                   onClick={() => { deleteFir(selectedFir.id); setSelectedFir(null); }}
                   className="flex items-center gap-2 label-mono text-[10px] text-accent border border-accent/40 px-4 py-2 hover:bg-accent hover:text-background transition-all"
                 >
-                  <Trash2 size={12} /> Delete FIR
+                  <Trash2 size={12} /> Delete Draft
                 </button>
+                {(selectedFir.status === 'draft' || !selectedFir.status) && (
+                  <button
+                    onClick={() => handleAddToDashboard(selectedFir)}
+                    className="flex items-center gap-2 label-mono text-[10px] text-background bg-accent border border-accent px-5 py-2 hover:bg-foreground hover:border-foreground transition-all font-bold uppercase"
+                  >
+                    <ArrowRight size={12} /> Add to Dashboard
+                  </button>
+                )}
               </div>
             </motion.div>
           </motion.div>
