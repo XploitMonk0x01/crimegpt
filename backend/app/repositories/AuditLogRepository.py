@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select, func
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit_log import AuditLog
@@ -96,7 +97,7 @@ class AuditLogRepository:
         limit: int = 50,
     ) -> list[AuditLog]:
         """Get recent audit logs, optionally filtered by action type."""
-        stmt = select(AuditLog)
+        stmt = select(AuditLog).options(joinedload(AuditLog.officer))
         if action:
             stmt = stmt.where(AuditLog.action == action)
         stmt = stmt.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit)

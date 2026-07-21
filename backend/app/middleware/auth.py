@@ -30,8 +30,11 @@ from app.types.enums import OfficerRole
 
 logger = logging.getLogger("crimegpt.auth")
 
-# Demo user UUID — matches the one in authService.py
-_DEMO_UUID = uuid.UUID("00000000-0000-0000-0000-000000000000")
+# Demo user UUIDs — fixed IDs for all 3 seeded demo officers
+_DEMO_UUID = uuid.UUID("00000000-0000-0000-0000-000000000000")   # Admin
+_DEMO_UUID_SHO = uuid.UUID("00000000-0000-0000-0000-000000000001")  # SHO
+_DEMO_UUID_IO = uuid.UUID("00000000-0000-0000-0000-000000000002")   # IO
+_ALL_DEMO_UUIDS = {_DEMO_UUID, _DEMO_UUID_SHO, _DEMO_UUID_IO}
 
 # Security scheme — extracts Bearer token from Authorization header
 _bearer_scheme = HTTPBearer(auto_error=True)
@@ -104,13 +107,16 @@ async def get_current_user(
             detail="Invalid officer ID in token",
         )
 
-    # --- DEMO BYPASS: Return mock officer without DB lookup ---
+    # --- DEMO BYPASS: Admin (all-zero UUID) never touches the DB ---
     if officer_id == _DEMO_UUID:
-        logger.debug("Demo user bypass — returning mock Officer")
+        logger.debug("Demo user bypass — returning mock Admin Officer")
         return _create_demo_officer()
 
-    # 4. Check Redis session (if Redis is available)
-    if redis:
+    # --- DEMO BYPASS: SHO/IO demo officers skip Redis session check but still load from DB ---
+    is_demo_officer = officer_id in _ALL_DEMO_UUIDS
+
+    # 4. Check Redis session (if Redis is available and NOT a demo officer)
+    if redis and not is_demo_officer:
         try:
             session = await redis.get(f"session:{officer_id}")
             if not session:

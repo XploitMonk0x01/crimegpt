@@ -34,18 +34,54 @@ class DashboardService:
         self._audit_repo = AuditLogRepository(db)
 
     async def get_officer_dashboard(self, officer: Officer) -> dict[str, Any]:
-        """Dashboard for Constable — own FIRs and stats."""
-        # FIR counts by status
-        draft_count = await self._fir_repo.count_by_officer(officer.id, status=FIRStatus.DRAFT)
-        submitted_count = await self._fir_repo.count_by_officer(officer.id, status=FIRStatus.SUBMITTED)
-        approved_count = await self._fir_repo.count_by_officer(officer.id, status=FIRStatus.APPROVED)
-        rejected_count = await self._fir_repo.count_by_officer(officer.id, status=FIRStatus.REJECTED)
+        """Role-aware dashboard — data scope depends on officer role."""
+        role_value = officer.role.value if officer.role else "inspector"
+        is_privileged = role_value in ("station_head", "admin")
 
-        # Recent FIRs
-        recent_firs = await self._fir_repo.list_by_officer(officer.id, limit=5)
+        # ── Stats: scoped to officer for IO, global for SHO/Admin ───────────
+        if is_privileged:
+            draft_count = await self._fir_repo.count(status=FIRStatus.DRAFT)
+            submitted_count = await self._fir_repo.count(status=FIRStatus.SUBMITTED)
+            approved_count = await self._fir_repo.count(status=FIRStatus.APPROVED)
+            rejected_count = await self._fir_repo.count(status=FIRStatus.REJECTED)
+        else:
+            draft_count = await self._fir_repo.count_by_officer(officer.id, status=FIRStatus.DRAFT)
+            submitted_count = await self._fir_repo.count_by_officer(officer.id, status=FIRStatus.SUBMITTED)
+            approved_count = await self._fir_repo.count_by_officer(officer.id, status=FIRStatus.APPROVED)
+            rejected_count = await self._fir_repo.count_by_officer(officer.id, status=FIRStatus.REJECTED)
 
-        # Evidence count
-        stmt = select(func.count()).select_from(Evidence).where(Evidence.officer_id == officer.id)
+        # ── Recent FIRs (Station Queue for SHO/Admin, own FIRs for IO) ──────
+        if is_privileged:
+            all_firs = await self._fir_repo.get_many(
+                offset=0, limit=50, order_by="created_at", order_desc=True
+            )
+        else:
+            all_firs = await self._fir_repo.list_by_officer(officer.id, limit=50)
+
+        def serialize_fir(f):
+            return {
+                "id": str(f.id),
+                "fir_number": f.fir_number,
+                "status": f.status.value if f.status else None,
+                "incident_description": (f.incident_description or "")[:120],
+                "ai_narrative": (f.ai_narrative or "")[:120],
+                "officer_id": str(f.officer_id),
+                "created_at": f.created_at.isoformat() if f.created_at else None,
+            }
+
+        recent_firs = [serialize_fir(f) for f in all_firs]
+
+        # ── Pending approvals (SHO/Admin only) ──────────────────────────────
+        pending_approvals = []
+        if is_privileged:
+            pending = await self._fir_repo.list_pending_approval(limit=50)
+            pending_approvals = [serialize_fir(f) for f in pending]
+
+        # ── Evidence count ──────────────────────────────────────────────────
+        if is_privileged:
+            stmt = select(func.count()).select_from(Evidence)
+        else:
+            stmt = select(func.count()).select_from(Evidence).where(Evidence.officer_id == officer.id)
         result = await self._db.execute(stmt)
         evidence_count = result.scalar() or 0
 
@@ -53,7 +89,7 @@ class DashboardService:
             "officer": {
                 "name": officer.name,
                 "badge_no": officer.badge_no,
-                "role": officer.role.value,
+                "role": role_value,
             },
             "fir_stats": {
                 "draft": draft_count,
@@ -63,15 +99,8 @@ class DashboardService:
                 "total": draft_count + submitted_count + approved_count + rejected_count,
             },
             "evidence_count": evidence_count,
-            "recent_firs": [
-                {
-                    "id": str(f.id),
-                    "fir_number": f.fir_number,
-                    "status": f.status.value if f.status else None,
-                    "created_at": f.created_at.isoformat() if f.created_at else None,
-                }
-                for f in recent_firs
-            ],
+            "recent_firs": recent_firs,
+            "pending_approvals": pending_approvals,
         }
 
     async def get_inspector_dashboard(self, officer: Officer) -> dict[str, Any]:
@@ -125,6 +154,8 @@ class DashboardService:
                 {
                     "id": str(log.id),
                     "officer_id": str(log.officer_id),
+                    "officer_name": log.officer.name if log.officer else "Unknown",
+                    "officer_badge": log.officer.badge_no if log.officer else "Unknown",
                     "action": getattr(log.action, "value", log.action) if log.action else None,
                     "resource_type": getattr(log.resource_type, "value", log.resource_type) if log.resource_type else None,
                     "resource_id": str(log.resource_id) if log.resource_id else None,

@@ -81,8 +81,8 @@ async def edit_fir(
 
 @router.post(
     "/{fir_id}/review",
-    summary="Approve/Reject FIR",
-    dependencies=[Depends(require_role(OfficerRole.INSPECTOR, OfficerRole.STATION_HEAD, OfficerRole.ADMIN))],
+    summary="Approve/Reject FIR (Admin Only)",
+    dependencies=[Depends(require_role(OfficerRole.ADMIN))],
 )
 async def approve_reject_fir(
     fir_id: uuid.UUID,

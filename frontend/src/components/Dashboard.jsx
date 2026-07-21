@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, AlertTriangle, X, Search, Loader2 } from 'lucide-react';
-import { dashboardService, searchService } from '../services/api';
+import { FileText, AlertTriangle, X, Search, Loader2, CheckCircle, XCircle, Shield, ClipboardList, BarChart2 } from 'lucide-react';
+import { dashboardService, searchService, firService } from '../services/api';
 import useFirStore from '../store/firStore';
+import useAuthStore from '../store/authStore';
+import toast from 'react-hot-toast';
 
-const StatCard = ({ label, value, detail, loading }) => (
-  <div className="p-5 border-r border-b border-border flex flex-col justify-between min-h-[120px] group hover:bg-muted/30 transition-colors">
+const StatCard = ({ label, value, detail, loading, accent }) => (
+  <div className={`p-5 border-r border-b border-border flex flex-col justify-between min-h-[120px] group hover:bg-muted/30 transition-colors ${accent ? 'border-l-2 border-l-accent' : ''}`}>
     <p className="label-mono text-muted-foreground/60 text-[8px] group-hover:text-accent transition-colors">{label}</p>
     <div>
       {loading ? (
@@ -29,10 +31,9 @@ const StatusBadge = ({ status }) => {
     approved: 'border-green-500 text-green-500',
     rejected: 'border-accent text-accent',
   };
-
   return (
-    <span className={`label-mono text-[10px] border px-2 py-0.5 uppercase ${styles[status] || styles.draft}`}>
-      {status || 'Unknown'}
+    <span className={`label-mono text-[10px] border px-2 py-0.5 uppercase ${styles[typeof status === 'object' ? 'draft' : status] || styles.draft}`}>
+      {typeof status === 'object' ? 'draft' : (status || 'Unknown')}
     </span>
   );
 };
@@ -47,10 +48,268 @@ function formatTimeAgo(isoString) {
   if (mins < 60) return `${mins} min ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
+function safeStr(val) {
+  if (val === null || val === undefined) return '—';
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
+// ─── Pending Approvals Panel (Admin only) ─────────────────────────────────────
+function PendingApprovalsPanel({ firs, onAction }) {
+  const [actingId, setActingId] = useState(null);
+
+  const handleAction = async (fir, action) => {
+    setActingId(fir.id);
+    await onAction(fir, action);
+    setActingId(null);
+  };
+
+  const pendingFirs = firs.filter(f => {
+    const status = typeof f.status === 'object' ? f.status?.value : f.status;
+    return status === 'submitted';
+  });
+
+  if (pendingFirs.length === 0) {
+    return (
+      <div className="py-10 text-center">
+        <CheckCircle size={32} strokeWidth={1} className="text-green-500/30 mx-auto mb-3" />
+        <p className="label-mono text-[9px] text-muted-foreground/40">No pending approvals</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0 border-t border-border">
+      {pendingFirs.map((fir, i) => (
+        <motion.div
+          key={fir.id}
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: i * 0.05 }}
+          className="flex items-center justify-between py-5 border-b border-border px-4 -mx-4 hover:bg-muted/30 transition-colors"
+        >
+          <div className="flex items-baseline gap-4">
+            <span className="label-mono text-accent/50 text-[9px]">{String(i + 1).padStart(2, '0')}</span>
+            <div>
+              <p className="font-bold uppercase tracking-tight">{fir.fir_number || `FIR-${fir.id?.slice(0, 8)}`}</p>
+              <p className="label-mono text-[8px] text-muted-foreground mt-0.5 truncate max-w-xs">
+                {safeStr(fir.incident_description || fir.ai_narrative)?.slice(0, 80)}...
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              disabled={actingId === fir.id}
+              onClick={() => handleAction(fir, 'approve')}
+              className="flex items-center gap-1.5 px-4 py-2 bg-green-500/10 border border-green-500/40 text-green-400 hover:bg-green-500/20 transition-all label-mono text-[9px] uppercase disabled:opacity-50"
+            >
+              {actingId === fir.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+              Approve
+            </button>
+            <button
+              disabled={actingId === fir.id}
+              onClick={() => handleAction(fir, 'reject')}
+              className="flex items-center gap-1.5 px-4 py-2 bg-accent/10 border border-accent/40 text-accent hover:bg-accent/20 transition-all label-mono text-[9px] uppercase disabled:opacity-50"
+            >
+              {actingId === fir.id ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+              Reject
+            </button>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Audit Log Panel (SHO + Admin) ────────────────────────────────────────────
+function AuditLogPanel({ logs }) {
+  if (!logs || logs.length === 0) {
+    return <p className="label-mono text-[9px] text-muted-foreground/40 py-4 text-center">No audit events recorded</p>;
+  }
+  const formatAction = (action) => {
+    if (!action) return 'UNKNOWN';
+    return String(action).replace(/_/g, ' ').toUpperCase();
+  };
+
+  return (
+    <div className="space-y-0 border-t border-border max-h-64 overflow-y-auto custom-scrollbar">
+      {logs.map((log, i) => (
+        <div key={log.id || i} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0 px-1 hover:bg-muted/30 transition-colors group">
+          <div className="flex items-center gap-3">
+            <span className="label-mono text-[7px] text-accent/50 w-5 text-right group-hover:text-accent transition-colors">{i + 1}</span>
+            <div>
+              <p className="label-mono text-[9px] text-foreground/80 font-bold">{formatAction(log.action)}</p>
+              <p className="label-mono text-[7px] text-muted-foreground/60 mt-0.5">
+                <span className="text-accent/70">{safeStr(log.resource_type).toUpperCase()}</span>
+                <span className="mx-1.5 opacity-30">|</span>
+                By: <span className="text-foreground/70">{log.officer_badge || 'SYSTEM'}</span>
+              </p>
+            </div>
+          </div>
+          <p className="label-mono text-[7px] text-muted-foreground/40 shrink-0">{formatTimeAgo(log.created_at)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── FIR Detail Modal ─────────────────────────────────────────────────────────
+function FIRDetailModal({ fir, onClose, role, onApprove, onReject }) {
+  const [acting, setActing] = useState(false);
+
+  const handleApprove = async () => {
+    setActing(true);
+    await onApprove(fir);
+    setActing(false);
+    onClose();
+  };
+
+  const handleReject = async () => {
+    setActing(true);
+    await onReject(fir);
+    setActing(false);
+    onClose();
+  };
+
+  const firStatus = typeof fir.status === 'object' ? fir.status?.value : fir.status;
+  const isSubmitted = firStatus === 'submitted';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        onClick={e => e.stopPropagation()}
+        className="bg-muted border border-border w-full max-w-2xl max-h-[85vh] overflow-y-auto p-8 shadow-2xl relative"
+      >
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 text-muted-foreground hover:text-foreground transition-colors hover:bg-background/50 rounded-full">
+          <X size={20} />
+        </button>
+
+        <div className="mb-10">
+          <p className="label-mono text-[10px] text-accent/70 mb-2 uppercase tracking-widest">Case Profile</p>
+          <h2 className="text-5xl font-bold tracking-tighter uppercase leading-none truncate">{fir.fir_number}</h2>
+          <div className="mt-4 flex items-center gap-4">
+            <StatusBadge status={fir.status} />
+            <span className="label-mono text-[9px] text-muted-foreground/40 italic">ID: {fir.id}</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 py-8 border-y border-border/50">
+          <div className="space-y-6">
+            <div>
+              <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Complainant</p>
+              <p className="text-xl font-bold tracking-tight uppercase">{safeStr(fir.complainant?.name) || 'NOT SPECIFIED'}</p>
+            </div>
+            <div>
+              <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Contact Details</p>
+              <p className="text-base font-medium text-foreground/80">{safeStr(fir.complainant?.contact || fir.complainant?.phone)}</p>
+            </div>
+            <div>
+              <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Identity Proof</p>
+              <p className="text-sm font-medium text-foreground/70">{safeStr(fir.complainant?.id_proof || fir.complainant?.id_number) || 'PENDING VERIFICATION'}</p>
+            </div>
+          </div>
+          <div className="space-y-6">
+            <div>
+              <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Location of Incident</p>
+              <p className="text-xl font-bold tracking-tight uppercase">{safeStr(fir.incident_location || fir.location) || 'UNDEFINED'}</p>
+            </div>
+            <div>
+              <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Occurrence Date</p>
+              <p className="text-base font-medium text-foreground/80">
+                {fir.incident_date || fir.created_at ? new Date(fir.incident_date || fir.created_at).toLocaleString() : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Reported At</p>
+              <p className="text-sm font-medium text-foreground/70">{fir.created_at ? new Date(fir.created_at).toLocaleString() : '—'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <p className="label-mono text-[9px] text-muted-foreground uppercase">Narrative Statement</p>
+            <FileText size={14} className="text-muted-foreground/20" />
+          </div>
+          <div className="bg-background/30 p-6 border border-border/40 rounded-sm">
+            <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap italic">
+              "{safeStr(fir.incident_description || fir.ai_narrative) || 'No statement provided.'}"
+            </p>
+          </div>
+        </div>
+
+        {fir.sections?.length > 0 && (
+          <div className="mt-8">
+            <p className="label-mono text-[9px] text-muted-foreground uppercase mb-3">Legal Provisions</p>
+            <div className="flex flex-wrap gap-2">
+              {fir.sections?.map((section, idx) => (
+                <span key={idx} className="label-mono text-[9px] bg-accent/5 border border-accent/20 text-accent px-3 py-1 uppercase">
+                  {typeof section === 'object' ? (section.section || section.type || JSON.stringify(section)) : section}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Admin Approve/Reject Controls */}
+        {role === 'admin' && isSubmitted && (
+          <div className="mt-10 p-5 border border-yellow-500/30 bg-yellow-500/5">
+            <p className="label-mono text-[8px] text-yellow-500/70 uppercase mb-4 flex items-center gap-2">
+              <Shield size={10} /> Admin Action Required — This FIR is pending review
+            </p>
+            <div className="flex gap-3">
+              <button
+                disabled={acting}
+                onClick={handleApprove}
+                className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-500/10 border border-green-500/40 text-green-400 hover:bg-green-500/20 transition-all label-mono text-[10px] uppercase font-bold disabled:opacity-50"
+              >
+                {acting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                Approve FIR
+              </button>
+              <button
+                disabled={acting}
+                onClick={handleReject}
+                className="flex-1 flex items-center justify-center gap-2 py-3 bg-accent/10 border border-accent/40 text-accent hover:bg-accent/20 transition-all label-mono text-[10px] uppercase font-bold disabled:opacity-50"
+              >
+                {acting ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                Reject FIR
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* SHO read-only notice */}
+        {role === 'sho' && isSubmitted && (
+          <div className="mt-10 p-4 border border-yellow-500/20 bg-yellow-500/5">
+            <p className="label-mono text-[8px] text-yellow-500/60 uppercase">
+              ⚠ This FIR awaits Admin Officer approval. SHO role has read-only access.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-8 flex justify-end">
+          <button onClick={onClose} className="px-8 py-3 bg-foreground text-background font-bold text-sm uppercase tracking-widest hover:bg-accent transition-colors">
+            Close Record
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -60,32 +319,51 @@ export default function Dashboard() {
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
-  
+  const [activeSection, setActiveSection] = useState('firs'); // 'firs' | 'pending' | 'audit'
+
   const localFirs = useFirStore(s => s.localFirs);
   const localDraftCount = localFirs.filter(f => f.status === 'draft').length;
 
-  const fetchDashboard = async () => {
+  const user = useAuthStore(s => s.user);
+  const role = user?.role || 'io';
+  const isAdmin = role === 'admin';
+  const isShoOrAdmin = role === 'sho' || role === 'admin';
+
+  const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await dashboardService.getOfficerDashboard();
-      if (response.success) {
-        setData(response.data);
+      
+      const dashboardReq = dashboardService.getOfficerDashboard();
+      const requests = [dashboardReq];
+      
+      if (isShoOrAdmin) {
+        requests.push(dashboardService.getAuditLogs({ limit: 20 }));
+      }
+      
+      const results = await Promise.allSettled(requests);
+      
+      const dashboardRes = results[0];
+      if (dashboardRes.status === 'fulfilled' && dashboardRes.value?.success) {
+        setData(dashboardRes.value.data);
+      } else {
+        throw new Error(dashboardRes.reason?.response?.data?.detail || 'Failed to load dashboard');
+      }
+      
+      if (isShoOrAdmin && results[1]?.status === 'fulfilled' && results[1].value?.success) {
+        setAuditLogs(results[1].value.data?.logs || []);
       }
     } catch (err) {
       console.error('Dashboard fetch failed:', err);
-      setError(err.response?.data?.detail || 'Failed to load dashboard');
+      setError(err.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }
-  };
+  }, [isShoOrAdmin]);
 
   useEffect(() => {
     queueMicrotask(fetchDashboard);
-    dashboardService.getAuditLogs({ limit: 10 }).then(r => {
-      if (r.success) setAuditLogs(r.data || []);
-    }).catch(() => {});
-  }, []);
+  }, [fetchDashboard]);
 
   const handleSearch = async (e) => {
     e?.preventDefault();
@@ -98,25 +376,61 @@ export default function Dashboard() {
     finally { setSearching(false); }
   };
 
+  const handleApprove = async (fir) => {
+    try {
+      await firService.review(fir.id, { action: 'approve' });
+      toast.success(`FIR ${fir.fir_number} approved`);
+      fetchDashboard();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to approve FIR');
+    }
+  };
+
+  const handleReject = async (fir) => {
+    try {
+      await firService.review(fir.id, { action: 'reject', remarks: 'Rejected by Admin Officer' });
+      toast.success(`FIR ${fir.fir_number} rejected`);
+      fetchDashboard();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to reject FIR');
+    }
+  };
+
   const stats = data?.fir_stats || {};
   const recentFirs = data?.recent_firs || [];
+  const pendingApprovals = data?.pending_approvals || [];
+  const pendingCount = pendingApprovals.length || stats.submitted || 0;
+
+  // Role label for hero
+  const ROLE_LABEL = { admin: 'Admin Officer', sho: 'SHO Officer', io: 'IO Officer' };
+  const ROLE_COLOR = { admin: 'text-red-400', sho: 'text-yellow-400', io: 'text-blue-400' };
 
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
       <section className="px-6 py-6 border-b border-border flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <p className="label-mono mb-1 text-accent/80">Active Operations</p>
+          <p className={`label-mono mb-1 text-[9px] uppercase tracking-widest ${ROLE_COLOR[role]}`}>
+            {ROLE_LABEL[role]} · Active Operations
+          </p>
           <h1 className="text-6xl md:text-7xl font-bold tracking-tighter leading-none uppercase text-foreground/90">
-            Live Stats
+            {isAdmin ? 'Command' : isShoOrAdmin ? 'Station HQ' : 'Live Stats'}
           </h1>
         </div>
-        <button 
-          onClick={fetchDashboard}
-          className="label-mono text-[10px] border-2 border-foreground px-4 py-2 hover:bg-accent hover:border-accent hover:text-background transition-all uppercase font-bold"
-        >
-          Sync System
-        </button>
+        <div className="flex items-center gap-3">
+          {isAdmin && pendingCount > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/30">
+              <Shield size={14} className="text-yellow-500" />
+              <span className="label-mono text-[9px] text-yellow-500 uppercase font-bold">{pendingCount} pending approval{pendingCount > 1 ? 's' : ''}</span>
+            </div>
+          )}
+          <button
+            onClick={fetchDashboard}
+            className="label-mono text-[10px] border-2 border-foreground px-4 py-2 hover:bg-accent hover:border-accent hover:text-background transition-all uppercase font-bold"
+          >
+            Sync System
+          </button>
+        </div>
       </section>
 
       {/* Search Bar */}
@@ -166,225 +480,150 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* Stat Cards */}
+      {/* Stat Cards — always shown */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Total FIRs"
-          value={loading ? '—' : stats.total ?? 0}
-          detail="All records"
-          loading={loading}
-        />
-        <StatCard
-          label="Submitted"
-          value={loading ? '—' : stats.submitted ?? 0}
-          detail="Pending review"
-          loading={loading}
-        />
-        <StatCard
-          label="Approved"
-          value={loading ? '—' : stats.approved ?? 0}
-          detail="Cleared"
-          loading={loading}
-        />
-        <StatCard
-          label="Evidence Files"
-          value={loading ? '—' : data?.evidence_count ?? 0}
-          detail="In vault"
-          loading={loading}
-        />
+        <StatCard label="Total FIRs" value={loading ? '—' : stats.total ?? 0} detail="All records" loading={loading} />
+        <StatCard label="Submitted" value={loading ? '—' : stats.submitted ?? 0} detail="Pending review" loading={loading} accent={isAdmin && (stats.submitted ?? 0) > 0} />
+        <StatCard label="Approved" value={loading ? '—' : stats.approved ?? 0} detail="Cleared" loading={loading} />
+        <StatCard label="Evidence Files" value={loading ? '—' : data?.evidence_count ?? 0} detail="In vault" loading={loading} />
       </div>
-
-      {/* Draft & Rejected Row */}
       <div className="grid grid-cols-1 md:grid-cols-2">
-        <StatCard
-          label="Drafts"
-          value={loading ? localDraftCount : (stats.draft ?? 0) + localDraftCount}
-          detail="In progress"
-          loading={false}
-        />
-        <StatCard
-          label="Rejected"
-          value={loading ? '—' : stats.rejected ?? 0}
-          detail="Needs revision"
-          loading={loading}
-        />
+        <StatCard label="Drafts" value={loading ? localDraftCount : (stats.draft ?? 0) + localDraftCount} detail="In progress" loading={false} />
+        <StatCard label="Rejected" value={loading ? '—' : stats.rejected ?? 0} detail="Needs revision" loading={loading} />
       </div>
 
-      {/* Recent FIRs Section */}
-      <section className="px-6 py-8">
-        <div className="flex items-end justify-between mb-4">
-          <h2 className="text-4xl font-bold tracking-tighter uppercase text-foreground/80">Recent FIRs</h2>
-          {error && (
-            <button
-              onClick={fetchDashboard}
-              className="label-mono border-b border-accent/50 pb-0.5 hover:text-accent transition-all text-muted-foreground"
-            >
-              Retry
-            </button>
-          )}
-        </div>
-
-        <div className="space-y-0 border-t border-border">
-          {loading ? (
-            // Skeleton loaders
-            [...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center justify-between py-8 border-b border-border px-4 -mx-4">
-                <div className="flex items-baseline gap-6">
-                  <div className="w-6 h-4 bg-muted animate-pulse" />
-                  <div>
-                    <div className="w-48 h-5 bg-muted animate-pulse mb-2" />
-                    <div className="w-32 h-3 bg-muted/50 animate-pulse" />
-                  </div>
-                </div>
-                <div className="w-16 h-5 bg-muted animate-pulse" />
-              </div>
-            ))
-          ) : recentFirs.length === 0 ? (
-            <div className="py-16 text-center">
-              <FileText size={48} strokeWidth={1} className="text-muted-foreground/20 mx-auto mb-4" />
-              <p className="label-mono text-muted-foreground/40 text-[10px]">No FIRs recorded yet</p>
-            </div>
-          ) : (
-            recentFirs.map((fir, i) => (
-              <motion.div
-                key={fir.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                onClick={() => setSelectedFir(fir)}
-                className="group flex items-center justify-between py-8 border-b border-border hover:bg-muted transition-all px-4 -mx-4 cursor-pointer"
+      {/* Role-based Content Tabs (SHO / Admin only) */}
+      {isShoOrAdmin && (
+        <section className="px-6 pt-8 pb-2 border-b border-border">
+          <div className="flex gap-6">
+            {[
+              { id: 'firs', label: 'Recent FIRs', icon: FileText },
+              ...(isAdmin ? [{ id: 'pending', label: `Pending Approval${pendingCount ? ` (${pendingCount})` : ''}`, icon: Shield }] : []),
+              { id: 'audit', label: 'Audit Log', icon: ClipboardList },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSection(tab.id)}
+                className={`flex items-center gap-2 pb-3 border-b-2 label-mono text-[10px] uppercase transition-all ${activeSection === tab.id ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
               >
-                <div className="flex items-baseline gap-6">
-                  <span className="label-mono opacity-30 group-hover:opacity-100 group-hover:text-accent">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <div>
-                    <p className="text-lg font-bold uppercase tracking-tight">
-                      {fir.fir_number || `FIR-${fir.id.slice(0, 8)}`}
-                    </p>
-                    <p className="label-mono mt-0.5 text-muted-foreground text-[9px]">
-                      {formatTimeAgo(fir.created_at)}
-                    </p>
+                <tab.icon size={12} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Main Content Area */}
+      <section className="px-6 py-8">
+        {/* IO: always shows Recent FIRs */}
+        {/* SHO/Admin: tabs switch between views */}
+        {(activeSection === 'firs' || !isShoOrAdmin) && (
+          <>
+            {!isShoOrAdmin && (
+              <div className="flex items-end justify-between mb-4">
+                <h2 className="text-4xl font-bold tracking-tighter uppercase text-foreground/80">Recent FIRs</h2>
+                {error && (
+                  <button onClick={fetchDashboard} className="label-mono border-b border-accent/50 pb-0.5 hover:text-accent transition-all text-muted-foreground">Retry</button>
+                )}
+              </div>
+            )}
+            {isShoOrAdmin && (
+              <div className="flex items-end justify-between mb-4">
+                <h2 className="text-3xl font-bold tracking-tighter uppercase text-foreground/80">Station FIR Queue</h2>
+              </div>
+            )}
+            <div className="space-y-0 border-t border-border">
+              {loading ? (
+                [...Array(3)].map((_, i) => (
+                  <div key={i} className="flex items-center justify-between py-8 border-b border-border px-4 -mx-4">
+                    <div className="flex items-baseline gap-6">
+                      <div className="w-6 h-4 bg-muted animate-pulse" />
+                      <div>
+                        <div className="w-48 h-5 bg-muted animate-pulse mb-2" />
+                        <div className="w-32 h-3 bg-muted/50 animate-pulse" />
+                      </div>
+                    </div>
+                    <div className="w-16 h-5 bg-muted animate-pulse" />
                   </div>
+                ))
+              ) : recentFirs.length === 0 ? (
+                <div className="py-16 text-center">
+                  <FileText size={48} strokeWidth={1} className="text-muted-foreground/20 mx-auto mb-4" />
+                  <p className="label-mono text-muted-foreground/40 text-[10px]">No FIRs recorded yet</p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <StatusBadge status={fir.status} />
-                  <span className="text-xl group-hover:translate-x-1 transition-transform">→</span>
-                </div>
-              </motion.div>
-            ))
-          )}
-        </div>
+              ) : (
+                recentFirs.map((fir, i) => (
+                  <motion.div
+                    key={fir.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    onClick={() => setSelectedFir(fir)}
+                    className="group flex items-center justify-between py-8 border-b border-border hover:bg-muted transition-all px-4 -mx-4 cursor-pointer"
+                  >
+                    <div className="flex items-baseline gap-6">
+                      <span className="label-mono opacity-30 group-hover:opacity-100 group-hover:text-accent">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <div>
+                        <p className="text-lg font-bold uppercase tracking-tight">{fir.fir_number || `FIR-${fir.id.slice(0, 8)}`}</p>
+                        <p className="label-mono mt-0.5 text-muted-foreground text-[9px]">{formatTimeAgo(fir.created_at)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <StatusBadge status={fir.status} />
+                      {isAdmin && (typeof fir.status === 'object' ? fir.status?.value : fir.status) === 'submitted' && (
+                        <span className="label-mono text-[7px] text-yellow-500 bg-yellow-500/10 border border-yellow-500/30 px-2 py-0.5 uppercase">Needs Review</span>
+                      )}
+                      <span className="text-xl group-hover:translate-x-1 transition-transform">→</span>
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Pending Approvals — Admin only */}
+        {activeSection === 'pending' && isAdmin && (
+          <>
+            <div className="flex items-end justify-between mb-4">
+              <h2 className="text-3xl font-bold tracking-tighter uppercase text-foreground/80">Pending Approvals</h2>
+              <span className="label-mono text-[9px] text-accent">{pendingCount} FIR{pendingCount !== 1 ? 's' : ''} awaiting decision</span>
+            </div>
+            <PendingApprovalsPanel
+              firs={pendingApprovals}
+              onAction={async (fir, action) => {
+                if (action === 'approve') await handleApprove(fir);
+                else await handleReject(fir);
+              }}
+            />
+          </>
+        )}
+
+        {/* Audit Log — SHO + Admin */}
+        {activeSection === 'audit' && isShoOrAdmin && (
+          <>
+            <div className="flex items-end justify-between mb-4">
+              <h2 className="text-3xl font-bold tracking-tighter uppercase text-foreground/80">Audit Trail</h2>
+              <span className="label-mono text-[9px] text-muted-foreground/50 uppercase">Last 20 events</span>
+            </div>
+            <AuditLogPanel logs={auditLogs} />
+          </>
+        )}
       </section>
 
-      {/* Detail Modal */}
+      {/* FIR Detail Modal */}
       <AnimatePresence>
         {selectedFir && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setSelectedFir(null)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              onClick={e => e.stopPropagation()}
-              className="bg-muted border border-border w-full max-w-2xl max-h-[85vh] overflow-y-auto p-8 shadow-2xl relative"
-            >
-              <button 
-                onClick={() => setSelectedFir(null)}
-                className="absolute top-6 right-6 p-2 text-muted-foreground hover:text-foreground transition-colors hover:bg-background/50 rounded-full"
-              >
-                <X size={20} />
-              </button>
-
-              <div className="mb-10">
-                <p className="label-mono text-[10px] text-accent/70 mb-2 uppercase tracking-widest">Case Profile</p>
-                <h2 className="text-5xl font-bold tracking-tighter uppercase leading-none truncate">
-                  {selectedFir.fir_number}
-                </h2>
-                <div className="mt-4 flex items-center gap-4">
-                  <StatusBadge status={selectedFir.status} />
-                  <span className="label-mono text-[9px] text-muted-foreground/40 italic">
-                    ID: {selectedFir.id}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-12 py-8 border-y border-border/50">
-                <div className="space-y-6">
-                  <div>
-                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Complainant</p>
-                    <p className="text-xl font-bold tracking-tight uppercase">{typeof selectedFir.complainant?.name === 'object' ? JSON.stringify(selectedFir.complainant?.name) : (selectedFir.complainant?.name || 'NOT SPECIFIED')}</p>
-                  </div>
-                  <div>
-                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Contact Details</p>
-                    <p className="text-base font-medium text-foreground/80">{typeof (selectedFir.complainant?.contact || selectedFir.complainant?.phone) === 'object' ? JSON.stringify(selectedFir.complainant?.contact || selectedFir.complainant?.phone) : (selectedFir.complainant?.contact || selectedFir.complainant?.phone || '—')}</p>
-                  </div>
-                  <div>
-                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Identity Proof</p>
-                    <p className="text-sm font-medium text-foreground/70">{typeof (selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number) === 'object' ? JSON.stringify(selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number) : (selectedFir.complainant?.id_proof || selectedFir.complainant?.id_number || 'PENDING VERIFICATION')}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <div>
-                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Location of Incident</p>
-                    <p className="text-xl font-bold tracking-tight uppercase">{typeof (selectedFir.incident_location || selectedFir.location) === 'object' ? JSON.stringify(selectedFir.incident_location || selectedFir.location) : (selectedFir.incident_location || selectedFir.location || 'UNDEFINED')}</p>
-                  </div>
-                  <div>
-                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Occurrence Date</p>
-                    <p className="text-base font-medium text-foreground/80">
-                      {selectedFir.incident_date || selectedFir.created_at ? new Date(selectedFir.incident_date || selectedFir.created_at).toLocaleString() : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="label-mono text-[9px] text-muted-foreground uppercase mb-2">Reported At</p>
-                    <p className="text-sm font-medium text-foreground/70">
-                      {selectedFir.created_at ? new Date(selectedFir.created_at).toLocaleString() : '—'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-10">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="label-mono text-[9px] text-muted-foreground uppercase">Narrative Statement</p>
-                  <FileText size={14} className="text-muted-foreground/20" />
-                </div>
-                <div className="bg-background/30 p-6 border border-border/40 rounded-sm">
-                  <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap italic">
-                    "{typeof (selectedFir.incident_description || selectedFir.ai_narrative) === 'object' ? JSON.stringify(selectedFir.incident_description || selectedFir.ai_narrative) : (selectedFir.incident_description || selectedFir.ai_narrative || 'No statement provided.')}"
-                  </p>
-                </div>
-              </div>
-
-              {selectedFir.sections?.length > 0 && (
-                <div className="mt-8">
-                  <p className="label-mono text-[9px] text-muted-foreground uppercase mb-3">Legal Provisions</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedFir.sections?.map((section, idx) => (
-                      <span key={idx} className="label-mono text-[9px] bg-accent/5 border border-accent/20 text-accent px-3 py-1 uppercase">
-                        {typeof section === 'object' ? (section.section || section.type || JSON.stringify(section)) : section}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-12 flex justify-end">
-                <button 
-                  onClick={() => setSelectedFir(null)}
-                  className="px-8 py-3 bg-foreground text-background font-bold text-sm uppercase tracking-widest hover:bg-accent transition-colors"
-                >
-                  Close Record
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <FIRDetailModal
+            fir={selectedFir}
+            role={role}
+            onClose={() => setSelectedFir(null)}
+            onApprove={handleApprove}
+            onReject={handleReject}
+          />
         )}
       </AnimatePresence>
     </div>

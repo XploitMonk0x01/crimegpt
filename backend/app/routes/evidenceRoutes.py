@@ -10,13 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.middleware.auth import get_current_user
+from app.middleware.rbac import require_role
 from app.models.officer import Officer
 from app.services.evidenceService import EvidenceService
+from app.types.enums import OfficerRole
 
 router = APIRouter()
 
 
-@router.post("/upload", summary="Upload Evidence")
+@router.post("/upload", summary="Upload Evidence",
+    dependencies=[Depends(require_role(OfficerRole.INSPECTOR, OfficerRole.STATION_HEAD, OfficerRole.ADMIN))],
+)
 async def upload_evidence(
     file: UploadFile = File(...),
     fir_id: uuid.UUID = Form(...),
