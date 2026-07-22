@@ -87,8 +87,8 @@ export default function App() {
           },
           success: {
             iconTheme: {
-              primary: 'var(--color-accent)',
-              secondary: 'var(--color-background)',
+              primary: '#22C55E',
+              secondary: '#FFFFFF',
             },
           },
         }}

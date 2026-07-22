@@ -394,7 +394,7 @@ export default function FIRAutomator() {
         complainant_name: '', complainant_contact: '', complainant_address: '',
         complainant_id: '', complainant_id_type: '', incident_location: '', incident_time: ''
       });
-      toast.success(`✅ FIR ${firNumber} SUBMITTED TO COMMAND DASHBOARD`);
+      toast.success(`FIR ${firNumber} SUBMITTED TO COMMAND DASHBOARD`);
 
       // Backend sync
       firService.submit({
