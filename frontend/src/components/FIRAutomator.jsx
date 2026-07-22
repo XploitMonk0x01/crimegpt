@@ -750,13 +750,15 @@ export default function FIRAutomator() {
               {liveSections.map((section) => (
                 <button
                   key={section}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
                     if (!recommendedSections.includes(section)) {
                       setRecommendedSections(prev => [...prev, section]);
                     }
+                    window.open(`https://devgan.in/bns/section/${(section.match(/\d+/) || [])[0] || ''}/`, '_blank');
                   }}
                   className="label-mono text-[8px] border border-accent/30 text-accent/80 px-2 py-0.5 hover:bg-accent hover:text-background transition-all"
-                  title="Click to add to FIR"
+                  title="Click to add to FIR & open section details"
                 >
                   + {section}
                 </button>
@@ -885,7 +887,7 @@ export default function FIRAutomator() {
             {recommendedSections.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {recommendedSections.map((section) => (
-                  <span key={section} className="label-mono text-[9px] border border-accent/40 text-accent px-2 py-1">
+                  <span key={section} className="label-mono text-[9px] border border-accent/40 text-accent px-2 py-1 cursor-pointer hover:bg-accent/10 transition-all" onClick={() => window.open(`https://devgan.in/bns/section/${(section.match(/\d+/) || [])[0] || ''}/`, '_blank')} title="Open section on Devgan.in">
                     {section}
                   </span>
                 ))}
