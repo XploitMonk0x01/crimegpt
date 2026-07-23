@@ -10,7 +10,8 @@ import {
   ChevronRight,
   Shield,
   Stamp,
-  BookOpen
+  BookOpen,
+  Globe
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
@@ -36,6 +37,7 @@ export default function Sidebar({ activeTab, setActiveTab, onSettingsClick }) {
     { id: 'linkage', label: 'Linkage', icon: Link2, roles: ['sho', 'admin'] },
     { id: 'documents', label: 'Documents', icon: Stamp, roles: ['io', 'sho', 'admin'] },
     { id: 'diary', label: 'Diary', icon: BookOpen, roles: ['io', 'sho', 'admin'] },
+    { id: 'lers', label: 'LERS', icon: Globe, roles: ['io', 'sho', 'admin'] },
   ];
 
   const visibleMenuItems = menuItems.filter((item) => item.roles.includes(role));

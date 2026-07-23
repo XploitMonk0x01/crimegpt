@@ -9,6 +9,7 @@ import DocumentGenerator from './components/DocumentGenerator';
 import CaseDiary from './components/CaseDiary';
 import Login from './components/Login';
 import UserSettings from './components/UserSettings';
+import LERSPortal from './components/LERSPortal';
 import { motion, AnimatePresence } from 'framer-motion';
 import useAuthStore from './store/authStore';
 import { authService } from './services/api';
@@ -24,6 +25,7 @@ const TAB_ROLES = {
   linkage:   ['sho', 'admin'],
   documents: ['io', 'sho', 'admin'],
   diary:     ['io', 'sho', 'admin'],
+  lers:      ['io', 'sho', 'admin'],
 };
 
 export default function App() {
@@ -133,6 +135,7 @@ export default function App() {
             {effectiveTab === 'linkage' && <CaseLinkage />}
             {effectiveTab === 'documents' && <DocumentGenerator />}
             {effectiveTab === 'diary' && <CaseDiary />}
+            {effectiveTab === 'lers' && <LERSPortal />}
           </motion.div>
         </AnimatePresence>
       </main>

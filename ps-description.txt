@@ -73,7 +73,7 @@ NLP-based module to analyse the case summary and suggest:
 - [x] **Evidence image upload and tagging** with SHA256 integrity verification and chain of custody logs.
 - [x] **Offline draft support** for local storage in police stations.
 - [x] **Linkage to CCTNS or BharatPol mock API** (National Grid FIR push, reference ID generation, & criminal record checks).
-- [ ] Integration with Meta/Facebook/Instagram/WhatsApp LERS compliant request templates.
+- [x] **Integration with Meta/Facebook/Instagram/WhatsApp LERS compliant request templates** (Emergency Disclosure, Preservation, Subscriber & IP Log requests — LERS Cyber Portal module).
 
 ---
 ## Deliverables

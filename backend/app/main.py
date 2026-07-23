@@ -160,6 +160,7 @@ def _register_routers(app: FastAPI, settings) -> None:
     from app.routes.caseDiaryRoutes import router as diary_router
     from app.routes.searchRoutes import router as search_router
     from app.routes.cctnsRoutes import router as cctns_router
+    from app.routes.lersRoutes import router as lers_router
 
     app.include_router(auth_router, prefix=f"{prefix}/auth", tags=["Authentication"])
     app.include_router(fir_router, prefix=f"{prefix}/fir", tags=["FIR Management"])
@@ -172,8 +173,9 @@ def _register_routers(app: FastAPI, settings) -> None:
     app.include_router(diary_router, prefix=f"{prefix}/diary", tags=["Case Diary"])
     app.include_router(search_router, prefix=f"{prefix}/search", tags=["Search"])
     app.include_router(cctns_router, prefix=f"{prefix}/cctns", tags=["CCTNS & BharatPol Interoperability"])
+    app.include_router(lers_router, prefix=f"{prefix}/lers", tags=["LERS Cyber Portal"])
 
-    logger.info(f"   Registered 11 API routers under {prefix}")
+    logger.info(f"   Registered 12 API routers under {prefix}")
 
 
 # Module-level app instance for uvicorn / ASGI servers

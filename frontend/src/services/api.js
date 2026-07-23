@@ -275,5 +275,21 @@ export const cctnsService = {
   },
 };
 
+// ─────────────── LERS Cyber Portal Service ───────────────
+export const lersService = {
+  getPlatforms: async () => {
+    const response = await api.get('/lers/platforms');
+    return response.data;
+  },
+  getRequestTypes: async () => {
+    const response = await api.get('/lers/request-types');
+    return response.data;
+  },
+  generate: async (payload) => {
+    const response = await api.post('/lers/generate', payload);
+    return response.data;
+  },
+};
+
 export default api;
 
