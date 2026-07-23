@@ -60,6 +60,15 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+function safeStr(val) {
+  if (!val) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') {
+    return val.name || val.text || val.location || val.address || val.value || JSON.stringify(val);
+  }
+  return String(val);
+}
+
 function formatTimeAgo(iso) {
   if (!iso) return '';
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -284,7 +293,7 @@ export default function FIRAutomator() {
         const draft = response.data || {};
         const entities = draft.extracted_entities || {};
         const complainant = draft.suggested_complainant || {};
-        const firstLocation = Array.isArray(entities.locations) ? entities.locations[0] : '';
+        const firstLocation = safeStr(Array.isArray(entities.locations) ? entities.locations[0] : '');
 
         setDraftNarrative(draft.ai_narrative || '');
         setRecommendedSections(draft.recommended_sections || []);
@@ -347,7 +356,7 @@ export default function FIRAutomator() {
             const draft = response.data || {};
             const entities = draft.extracted_entities || {};
             const complainant = draft.suggested_complainant || {};
-            const firstLocation = Array.isArray(entities.locations) ? entities.locations[0] : '';
+            const firstLocation = safeStr(Array.isArray(entities.locations) ? entities.locations[0] : '');
             aiNarrative = draft.ai_narrative || '';
             sections = draft.recommended_sections || [];
             currentFormData = {
@@ -372,7 +381,7 @@ export default function FIRAutomator() {
         id: `local-${Date.now()}`,
         fir_number: firNumber,
         status: 'submitted',
-        incident_location: currentFormData.incident_location || 'Pending Investigation',
+        incident_location: safeStr(currentFormData.incident_location || 'Pending Investigation'),
         incident_description: aiNarrative || narrative,
         ai_narrative: aiNarrative || narrative,
         sections: sections,
@@ -396,24 +405,34 @@ export default function FIRAutomator() {
       });
       toast.success(`FIR ${firNumber} SUBMITTED TO COMMAND DASHBOARD`);
 
+      // Safely parse incident_date
+      const parseDateSafe = (timeStr) => {
+        if (!timeStr) return new Date().toISOString();
+        const parsed = new Date(timeStr);
+        return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+      };
+
       // Backend sync
       firService.submit({
         fir_number: firNumber,
-        incident_description: aiNarrative || narrative,
-        incident_date: currentFormData.incident_time ? new Date(currentFormData.incident_time).toISOString() : new Date().toISOString(),
-        incident_location: localFir.incident_location,
+        incident_description: safeStr(aiNarrative || narrative || 'No incident description provided.').trim(),
+        incident_date: parseDateSafe(currentFormData.incident_time),
+        incident_location: safeStr(currentFormData.incident_location || localFir.incident_location || 'Pending Location Verification').trim(),
         complainant: {
-          name: currentFormData.complainant_name || 'Unknown',
-          contact: currentFormData.complainant_contact || '',
-          address: currentFormData.complainant_address || '',
-          id_number: currentFormData.complainant_id || ''
+          name: safeStr(currentFormData.complainant_name || 'Unknown Complainant').trim(),
+          contact: safeStr(currentFormData.complainant_contact || '').trim(),
+          address: safeStr(currentFormData.complainant_address || '').trim(),
+          id_number: safeStr(currentFormData.complainant_id || '').trim()
         },
         sections: sections || [],
         ai_narrative: aiNarrative || narrative
       }).then((res) => {
-        if (res.success) console.log('FIR synced to backend');
+        if (res.success) {
+          console.log('FIR synced to backend');
+          deleteFir(localFir.id);
+        }
       }).catch((err) => {
-        console.error('Backend sync failed', err);
+        console.error('Backend sync failed', err.response?.data || err);
       });
 
     } catch (err) {
@@ -747,13 +766,13 @@ export default function FIRAutomator() {
           {!isAnalyzing && liveSections.length > 0 && (
             <div className="flex flex-wrap gap-2 items-center">
               <span className="label-mono text-[7px] text-muted-foreground/40 uppercase">Suggested:</span>
-              {liveSections.map((section) => (
+              {Array.from(new Set(liveSections)).map((section, idx) => (
                 <button
-                  key={section}
+                  key={`${section}-${idx}`}
                   onClick={(e) => {
                     e.preventDefault();
                     if (!recommendedSections.includes(section)) {
-                      setRecommendedSections(prev => [...prev, section]);
+                      setRecommendedSections(prev => Array.from(new Set([...prev, section])));
                     }
                     window.open(`https://devgan.in/bns/section/${(section.match(/\d+/) || [])[0] || ''}/`, '_blank');
                   }}
@@ -886,8 +905,8 @@ export default function FIRAutomator() {
           <div className="lg:col-span-8 space-y-5">
             {recommendedSections.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {recommendedSections.map((section) => (
-                  <span key={section} className="label-mono text-[9px] border border-accent/40 text-accent px-2 py-1 cursor-pointer hover:bg-accent/10 transition-all" onClick={() => window.open(`https://devgan.in/bns/section/${(section.match(/\d+/) || [])[0] || ''}/`, '_blank')} title="Open section on Devgan.in">
+                {Array.from(new Set(recommendedSections)).map((section, idx) => (
+                  <span key={`${section}-${idx}`} className="label-mono text-[9px] border border-accent/40 text-accent px-2 py-1 cursor-pointer hover:bg-accent/10 transition-all" onClick={() => window.open(`https://devgan.in/bns/section/${(section.match(/\d+/) || [])[0] || ''}/`, '_blank')} title="Open section on Devgan.in">
                     {section}
                   </span>
                 ))}

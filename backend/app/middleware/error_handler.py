@@ -45,10 +45,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def validation_exception_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
-        """
-        Handle Pydantic validation errors.
-        Converts Pydantic errors to our standardized ErrorResponse format.
-        """
+        """Handle Pydantic validation errors (422)."""
         errors = []
         for error in exc.errors():
             field = " → ".join(str(loc) for loc in error["loc"]) if error["loc"] else None
@@ -59,6 +56,9 @@ def register_exception_handlers(app: FastAPI) -> None:
                     code=error["type"],
                 )
             )
+
+        print(f"VALIDATION ERROR 422: {exc.errors()}", flush=True)
+        logger.error(f"Validation Error 422: {errors}")
 
         return JSONResponse(
             status_code=422,

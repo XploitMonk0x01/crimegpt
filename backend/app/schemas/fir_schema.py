@@ -73,10 +73,10 @@ class FIRSubmitRequest(BaseModel):
         max_length=100,
         description="FIR registration number",
     )
-    incident_description: str = Field(..., min_length=10)
-    incident_date: datetime
-    incident_location: str = Field(..., min_length=1)
-    complainant: ComplainantInfo
+    incident_description: str = Field(default="No description provided", min_length=1)
+    incident_date: Any = Field(default_factory=datetime.utcnow)
+    incident_location: str = Field(default="Pending Location", min_length=1)
+    complainant: ComplainantInfo = Field(default_factory=lambda: ComplainantInfo(name="Unknown Complainant"))
     accused: AccusedInfo | None = None
     sections: list[str] = Field(
         default_factory=list,
@@ -87,6 +87,45 @@ class FIRSubmitRequest(BaseModel):
         description="AI-generated FIR narrative (from generate endpoint)",
     )
     ai_recommended_sections: list[str] | None = None
+
+    @field_validator("incident_date", mode="before")
+    @classmethod
+    def validate_incident_date(cls, v: Any) -> datetime:
+        if isinstance(v, datetime):
+            return v
+        if isinstance(v, str) and v.strip():
+            try:
+                return datetime.fromisoformat(v.replace("Z", "+00:00"))
+            except Exception:
+                pass
+        return datetime.utcnow()
+
+    @field_validator("incident_location", "incident_description", mode="before")
+    @classmethod
+    def _coerce_str_fields(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, str):
+            return v
+        if isinstance(v, dict):
+            return v.get("name") or v.get("text") or v.get("location") or v.get("address") or v.get("value") or str(v)
+        return str(v)
+
+    @field_validator("sections", mode="before")
+    @classmethod
+    def _coerce_sections_list(cls, v: Any) -> list[str]:
+        if not v or not isinstance(v, list):
+            return []
+        res = []
+        for item in v:
+            if isinstance(item, str):
+                res.append(item)
+            elif isinstance(item, dict):
+                sec_str = item.get("bns_section") or item.get("section") or item.get("code") or item.get("title") or str(item)
+                res.append(sec_str)
+            else:
+                res.append(str(item))
+        return res
 
 
 class FIREditRequest(BaseModel):

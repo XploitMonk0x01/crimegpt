@@ -43,6 +43,7 @@ class AuditAction(str, Enum):
     FIR_REJECT = "FIR_REJECT"
     FIR_SEARCH = "FIR_SEARCH"
     FIR_EXPORT_PDF = "FIR_EXPORT_PDF"
+    CCTNS_SYNC = "CCTNS_SYNC"
 
     # Documents
     DOCUMENT_GENERATE = "DOCUMENT_GENERATE"

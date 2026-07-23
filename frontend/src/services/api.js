@@ -259,5 +259,21 @@ export const searchService = {
   },
 };
 
+// ─────────────── CCTNS & BharatPol Interoperability Service ───────────────
+export const cctnsService = {
+  syncFir: async (firId) => {
+    const response = await api.post(`/cctns/sync-fir/${firId}`);
+    return response.data;
+  },
+  verifyPerson: async (query) => {
+    const response = await api.get('/cctns/verify-person', { params: { query } });
+    return response.data;
+  },
+  getStatus: async (firId) => {
+    const response = await api.get(`/cctns/status/${firId}`);
+    return response.data;
+  },
+};
+
 export default api;
 

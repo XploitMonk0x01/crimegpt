@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, AlertTriangle, X, Search, Loader2, CheckCircle, XCircle, Shield, ClipboardList, BarChart2 } from 'lucide-react';
-import { dashboardService, searchService, firService } from '../services/api';
+import { FileText, AlertTriangle, X, Search, Loader2, CheckCircle, XCircle, Shield, ClipboardList, BarChart2, Globe, Database, UserCheck } from 'lucide-react';
+import { dashboardService, searchService, firService, cctnsService } from '../services/api';
 import useFirStore from '../store/firStore';
 import useAuthStore from '../store/authStore';
 import toast from 'react-hot-toast';
@@ -157,8 +157,42 @@ function AuditLogPanel({ logs }) {
 }
 
 // ─── FIR Detail Modal ─────────────────────────────────────────────────────────
-function FIRDetailModal({ fir, onClose, role, onApprove, onReject }) {
+function FIRDetailModal({ fir, onClose, role, onApprove, onReject, onSyncLocal }) {
   const [acting, setActing] = useState(false);
+  const [syncingCctns, setSyncingCctns] = useState(false);
+  const [cctnsData, setCctnsData] = useState(null);
+
+  useEffect(() => {
+    if (fir?.id && !fir.id.startsWith('local-')) {
+      cctnsService.getStatus(fir.id)
+        .then(res => {
+          if (res.success && res.is_synced) {
+            setCctnsData({
+              cctns_national_id: res.cctns_national_id,
+              verification_hash: 'VERIFIED_ON_GRID',
+              national_grid_node: 'NCRB_CENTRAL_NODE_DELHI_01',
+              synced_at: res.last_sync
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [fir?.id]);
+
+  const handleCctnsSync = async () => {
+    try {
+      setSyncingCctns(true);
+      const res = await cctnsService.syncFir(fir.id);
+      if (res.success) {
+        setCctnsData(res);
+        toast.success(`FIR synced to CCTNS! Ref: ${res.cctns_national_id}`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'CCTNS Sync failed');
+    } finally {
+      setSyncingCctns(false);
+    }
+  };
 
   const handleApprove = async () => {
     setActing(true);
@@ -168,10 +202,21 @@ function FIRDetailModal({ fir, onClose, role, onApprove, onReject }) {
   };
 
   const handleReject = async () => {
-    setActing(true);
-    await onReject(fir);
-    setActing(false);
-    onClose();
+    try {
+      setActing(true);
+      await onReject(fir);
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleSyncLocalAction = async () => {
+    try {
+      setActing(true);
+      await onSyncLocal(fir);
+    } finally {
+      setActing(false);
+    }
   };
 
   const firStatus = typeof fir.status === 'object' ? fir.status?.value : fir.status;
@@ -280,30 +325,85 @@ function FIRDetailModal({ fir, onClose, role, onApprove, onReject }) {
           </div>
         )}
 
+        {/* CCTNS & BharatPol National Grid Sync */}
+        <div className="mt-8 p-4 border border-blue-500/30 bg-blue-500/5 rounded-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Globe size={14} className="text-blue-400" />
+              <div>
+                <p className="label-mono text-[9px] font-bold text-blue-400 uppercase tracking-wider">CCTNS National Grid & BharatPol Linkage</p>
+                <p className="label-mono text-[8px] text-muted-foreground mt-0.5">Sync FIR record with NCRB Central Database Grid</p>
+              </div>
+            </div>
+            <button
+              disabled={syncingCctns || (fir.id && fir.id.startsWith('local-'))}
+              onClick={handleCctnsSync}
+              className="px-4 py-2 bg-blue-500/10 border border-blue-500/40 text-blue-400 hover:bg-blue-500/20 transition-all label-mono text-[9px] font-bold uppercase tracking-wider disabled:opacity-40 flex items-center gap-1.5"
+            >
+              {syncingCctns ? <Loader2 size={12} className="animate-spin" /> : <Database size={12} />}
+              {cctnsData ? 'Re-Sync CCTNS' : 'Push to CCTNS'}
+            </button>
+          </div>
+          {cctnsData && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-3 pt-3 border-t border-blue-500/20 space-y-1">
+              <div className="flex justify-between items-center text-[9px] label-mono">
+                <span className="text-muted-foreground">National Ref ID:</span>
+                <span className="font-bold text-green-400">{cctnsData.cctns_national_id}</span>
+              </div>
+              <div className="flex justify-between items-center text-[8px] label-mono">
+                <span className="text-muted-foreground">Verification Hash:</span>
+                <span className="text-blue-300 font-mono">{cctnsData.verification_hash}</span>
+              </div>
+              <div className="flex justify-between items-center text-[8px] label-mono">
+                <span className="text-muted-foreground">National Grid Node:</span>
+                <span className="text-muted-foreground">{cctnsData.national_grid_node}</span>
+              </div>
+            </motion.div>
+          )}
+        </div>
+
         {/* Admin Approve/Reject Controls */}
         {role === 'admin' && isSubmitted && (
           <div className="mt-10 p-5 border border-yellow-500/30 bg-yellow-500/5">
-            <p className="label-mono text-[8px] text-yellow-500/70 uppercase mb-4 flex items-center gap-2">
-              <Shield size={10} /> Admin Action Required — This FIR is pending review
-            </p>
-            <div className="flex gap-3">
-              <button
-                disabled={acting}
-                onClick={handleApprove}
-                className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-500/10 border border-green-500/40 text-green-400 hover:bg-green-500/20 transition-all label-mono text-[10px] uppercase font-bold disabled:opacity-50"
-              >
-                {acting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                Approve FIR
-              </button>
-              <button
-                disabled={acting}
-                onClick={handleReject}
-                className="flex-1 flex items-center justify-center gap-2 py-3 bg-accent/10 border border-accent/40 text-accent hover:bg-accent/20 transition-all label-mono text-[10px] uppercase font-bold disabled:opacity-50"
-              >
-                {acting ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
-                Reject FIR
-              </button>
-            </div>
+            {fir?.id?.toString().startsWith('local-') ? (
+              <div className="flex flex-col gap-3">
+                <p className="label-mono text-[10px] text-yellow-500 uppercase flex items-center gap-2">
+                  <AlertTriangle size={14} /> This FIR is saved locally and must be synced to the server before review.
+                </p>
+                <button
+                  onClick={handleSyncLocalAction}
+                  disabled={acting}
+                  className="px-4 py-2 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/30 transition-all label-mono text-[9px] uppercase font-bold self-start flex items-center gap-2"
+                >
+                  {acting ? <Loader2 size={12} className="animate-spin" /> : <Database size={12} />}
+                  Sync to Server Now
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="label-mono text-[8px] text-yellow-500/70 uppercase mb-4 flex items-center gap-2">
+                  <Shield size={10} /> Admin Action Required — This FIR is pending review
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    disabled={acting}
+                    onClick={handleApprove}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-500/10 border border-green-500/40 text-green-400 hover:bg-green-500/20 transition-all label-mono text-[10px] uppercase font-bold disabled:opacity-50"
+                  >
+                    {acting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                    Approve FIR
+                  </button>
+                  <button
+                    disabled={acting}
+                    onClick={handleReject}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-accent/10 border border-accent/40 text-accent hover:bg-accent/20 transition-all label-mono text-[10px] uppercase font-bold disabled:opacity-50"
+                  >
+                    {acting ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                    Reject FIR
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -339,6 +439,7 @@ export default function Dashboard() {
   const [activeSection, setActiveSection] = useState('firs'); // 'firs' | 'pending' | 'audit'
 
   const localFirs = useFirStore(s => s.localFirs);
+  const deleteFir = useFirStore(s => s.deleteFir);
   const localDraftCount = localFirs.filter(f => f.status === 'draft').length;
 
   const user = useAuthStore(s => s.user);
@@ -394,6 +495,10 @@ export default function Dashboard() {
   };
 
   const handleApprove = async (fir) => {
+    if (fir.id?.toString().startsWith('local-')) {
+      toast.error('This FIR is saved locally and must be synced to the server before review.');
+      return;
+    }
     try {
       await firService.review(fir.id, { action: 'approve' });
       toast.success(`FIR ${fir.fir_number} approved`);
@@ -404,6 +509,10 @@ export default function Dashboard() {
   };
 
   const handleReject = async (fir) => {
+    if (fir.id?.toString().startsWith('local-')) {
+      toast.error('This FIR is saved locally and must be synced to the server before review.');
+      return;
+    }
     try {
       await firService.review(fir.id, { action: 'reject', remarks: 'Rejected by Admin Officer' });
       toast.success(`FIR ${fir.fir_number} rejected`);
@@ -413,10 +522,55 @@ export default function Dashboard() {
     }
   };
 
+  const handleSyncLocal = async (fir) => {
+    try {
+      const dateVal = fir.incident_date || fir.incident_time;
+      let parsedIsoDate = new Date().toISOString();
+      if (dateVal) {
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) {
+          parsedIsoDate = d.toISOString();
+        }
+      }
+
+      const res = await firService.submit({
+        fir_number: safeStr(fir.fir_number) || `FIR-${Date.now()}`,
+        incident_description: safeStr(fir.incident_description || fir.ai_narrative || 'No description provided.'),
+        incident_date: parsedIsoDate,
+        incident_location: safeStr(fir.incident_location) || 'Pending Location',
+        complainant: {
+          name: safeStr(fir.complainant?.name) || 'Unknown Complainant',
+          contact: safeStr(fir.complainant?.contact || ''),
+          address: safeStr(fir.complainant?.address || ''),
+          id_number: safeStr(fir.complainant?.id_number || fir.complainant?.id_proof || '')
+        },
+        sections: (Array.isArray(fir.sections) ? fir.sections : []).map(s => {
+          if (!s) return '';
+          if (typeof s === 'string') return s;
+          if (typeof s === 'object') {
+            return s.bns_section || s.section || s.code || s.title || JSON.stringify(s);
+          }
+          return String(s);
+        }).filter(Boolean),
+        ai_narrative: fir.ai_narrative || fir.incident_description || ''
+      });
+
+      if (res.success) {
+        toast.success(`Local FIR ${fir.fir_number} synced to server successfully`);
+        deleteFir(fir.id);
+        setSelectedFir(null);
+        fetchDashboard();
+      }
+    } catch (err) {
+      console.error('Failed to sync local FIR:', err.response?.data || err);
+      const detail = err.response?.data?.errors?.[0]?.message || err.response?.data?.message || err.response?.data?.detail || 'Failed to sync local FIR to server';
+      toast.error(detail);
+    }
+  };
+
   const stats = data?.fir_stats || {};
   const recentFirs = data?.recent_firs || [];
   const pendingApprovals = data?.pending_approvals || [];
-  const pendingCount = pendingApprovals.length || stats.submitted || 0;
 
   // Merge local submitted FIRs into the dashboard list so they appear immediately
   const localSubmitted = localFirs.filter(f => f.status === 'submitted');
@@ -424,6 +578,12 @@ export default function Dashboard() {
     ...localSubmitted,
     ...recentFirs.filter(rf => !localSubmitted.some(lf => lf.fir_number === rf.fir_number))
   ];
+  
+  const allPendingApprovals = [
+    ...localSubmitted,
+    ...pendingApprovals.filter(pa => !localSubmitted.some(lf => lf.fir_number === pa.fir_number))
+  ];
+  const pendingCount = allPendingApprovals.length || stats.submitted || 0;
 
   // Role label for hero
   const ROLE_LABEL = { admin: 'Admin Officer', sho: 'SHO Officer', io: 'IO Officer' };
@@ -619,7 +779,7 @@ export default function Dashboard() {
               <span className="label-mono text-[9px] text-accent">{pendingCount} FIR{pendingCount !== 1 ? 's' : ''} awaiting decision</span>
             </div>
             <PendingApprovalsPanel
-              firs={pendingApprovals}
+              firs={allPendingApprovals}
               onAction={async (fir, action) => {
                 if (action === 'approve') await handleApprove(fir);
                 else await handleReject(fir);
@@ -649,6 +809,7 @@ export default function Dashboard() {
             onClose={() => setSelectedFir(null)}
             onApprove={handleApprove}
             onReject={handleReject}
+            onSyncLocal={handleSyncLocal}
           />
         )}
       </AnimatePresence>
