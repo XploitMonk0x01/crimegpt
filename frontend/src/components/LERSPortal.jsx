@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Globe, Shield, AlertTriangle, CheckCircle, Copy, Download,
   ChevronDown, Loader2, Send, Wifi, FileText, Clock, RefreshCw,
-  MessageCircle, Camera, Hash, Users, Radio
+  MessageCircle, Camera, Hash, Users, Radio, X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { lersService } from '../services/api';
+import { lersService, firService } from '../services/api';
 
 // ─── Platform Config ─────────────────────────────────────────────────────────
 
@@ -300,6 +300,24 @@ export default function LERSPortal() {
     urgency: 'standard',
   });
 
+  // FIR autocomplete state
+  const [firs, setFirs] = useState([]);
+  const [firQuery, setFirQuery] = useState('');
+  const [firDropdownOpen, setFirDropdownOpen] = useState(false);
+  const [selectedFirId, setSelectedFirId] = useState('');
+
+  // Fetch FIRs on mount
+  useEffect(() => {
+    firService.list({ pageSize: 50 }).then(r => {
+      if (r.success) setFirs(r.data || []);
+    }).catch(() => {});
+  }, []);
+
+  const filteredFirs = firs.filter(f =>
+    (f.fir_number?.toLowerCase().includes(firQuery.toLowerCase())) ||
+    (f.id.toLowerCase().includes(firQuery.toLowerCase()))
+  ).slice(0, 10);
+
   // Auto-set urgency from request type
   useEffect(() => {
     if (selectedType) {
@@ -321,7 +339,7 @@ export default function LERSPortal() {
       const res = await lersService.generate({
         platform: selectedPlatform,
         request_type: selectedType,
-        fir_reference: form.fir_reference || null,
+        fir_reference: selectedFirId || form.fir_reference || null,
         section_of_law: form.section_of_law,
         target_identifier: form.target_identifier,
         target_identifier_type: form.target_identifier_type,
@@ -348,6 +366,9 @@ export default function LERSPortal() {
     setSelectedPlatform(null);
     setSelectedType(null);
     setResult(null);
+    setFirQuery('');
+    setSelectedFirId('');
+    setFirDropdownOpen(false);
     setForm({
       fir_reference: '',
       target_identifier: '',
@@ -522,16 +543,75 @@ export default function LERSPortal() {
                 </select>
               </div>
 
-              {/* FIR Reference */}
-              <div className="space-y-2">
+              {/* FIR Reference with Autocomplete */}
+              <div className="space-y-2 relative">
                 <label className="label-mono text-[9px] text-muted-foreground/50 uppercase">FIR Reference No.</label>
-                <input
-                  type="text"
-                  value={form.fir_reference}
-                  onChange={e => setForm(f => ({ ...f, fir_reference: e.target.value }))}
-                  placeholder="e.g. FIR-00003"
-                  className="w-full bg-muted/50 border-none p-3.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent/40 font-mono"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={firQuery}
+                    onFocus={() => setFirDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setFirDropdownOpen(false), 200)}
+                    onChange={e => {
+                      setFirQuery(e.target.value);
+                      setSelectedFirId('');
+                      setForm(f => ({ ...f, fir_reference: '' }));
+                      setFirDropdownOpen(true);
+                    }}
+                    placeholder="Type FIR Number or UUID..."
+                    className="w-full bg-muted/50 border-none p-3.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent/40 font-mono"
+                  />
+                  {firQuery && (
+                    <button
+                      type="button"
+                      onClick={() => { setFirQuery(''); setSelectedFirId(''); setForm(f => ({ ...f, fir_reference: '' })); setFirDropdownOpen(false); }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 hover:text-accent transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                  <AnimatePresence>
+                    {firDropdownOpen && filteredFirs.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute left-0 right-0 top-full mt-1 bg-background border border-border z-50 shadow-2xl max-h-48 overflow-y-auto custom-scrollbar"
+                      >
+                        {filteredFirs.map(f => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => {
+                              setFirQuery(f.fir_number || f.id.slice(0, 8));
+                              setSelectedFirId(f.id);
+                              setForm(fm => ({ ...fm, fir_reference: f.fir_number || f.id }));
+                              setFirDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b border-border/50 last:border-none flex justify-between items-center group"
+                          >
+                            <div>
+                              <p className="font-bold text-xs uppercase tracking-tighter group-hover:text-accent transition-colors">
+                                {f.fir_number || 'UNNAMED FIR'}
+                              </p>
+                              <p className="label-mono text-[8px] text-muted-foreground">
+                                {f.id.slice(0, 18)}...
+                              </p>
+                            </div>
+                            <p className="label-mono text-[7px] border border-border px-1.5 py-0.5 opacity-50 group-hover:border-accent group-hover:text-accent transition-all">
+                              SELECT
+                            </p>
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                {selectedFirId && (
+                  <p className="label-mono text-[7px] text-accent mt-1">
+                    LINKED: {selectedFirId}
+                  </p>
+                )}
               </div>
 
               {/* Station Name */}
